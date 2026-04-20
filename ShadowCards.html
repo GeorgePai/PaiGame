@@ -30,7 +30,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 
 /* ── BOARD MINION ── */
 .minion{width:68px;height:88px;background:#f4f0e8;border:1px solid #444;border-radius:6px;position:relative;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.5);transition:all .15s;font-family:Georgia,serif}
-.minion.can{border:2px solid #ddd}
+.minion.can{border:2px solid rgba(85,140,255,0.7);box-shadow:0 0 10px rgba(85,136,255,0.4);animation:pulseBlue 2s ease-in-out infinite}
 .minion.atk-sel{background:#1a1a1a;border:2px solid #ffd700;box-shadow:0 0 12px rgba(255,215,0,.5)}
 .minion.glow{border:2px dashed #cc3333;box-shadow:0 0 10px rgba(200,50,50,.4)}
 .minion.sick{opacity:.65}
@@ -61,8 +61,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 .card-fw{animation:floatCard 2.2s ease-in-out infinite;animation-delay:var(--fd,0s)}
 @keyframes floatCard{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 
-/* ── DRAW ANIMATION ── */
-.card-fw.new-card{animation:flyIn .45s cubic-bezier(.2,1.3,.6,1) forwards}
+/* ── DRAW ANIMATION (chain flyIn → floatCard, no forwards to fix stuck bug) ── */
+.card-fw.new-card{animation:flyIn .45s cubic-bezier(.2,1.3,.6,1), floatCard 2.2s .45s ease-in-out infinite}
 @keyframes flyIn{
   0%{transform:translateX(220px) scale(0.25) rotate(12deg);opacity:0}
   60%{transform:translateX(-6px) scale(1.06) rotate(-1deg);opacity:1}
@@ -72,11 +72,21 @@ button{font-family:Georgia,serif;cursor:pointer}
 /* ── DRAG GHOST ── */
 #drag-ghost{position:fixed;pointer-events:none;z-index:999;transform:translate(-50%,-65%) rotate(-6deg);opacity:.88;transition:none}
 
+/* ── PLAYABLE GLOW (replaces faded/opacity approach) ── */
+.card.playable{border:1px solid rgba(85,140,255,0.75)!important;box-shadow:0 0 14px rgba(85,136,255,.55),0 2px 8px rgba(0,0,0,.5);animation:pulseBlue 2s ease-in-out infinite}
+@keyframes pulseBlue{0%,100%{box-shadow:0 0 8px rgba(85,136,255,.35),0 2px 6px rgba(0,0,0,.4)}50%{box-shadow:0 0 18px rgba(85,136,255,.7),0 2px 6px rgba(0,0,0,.4)}}
+.card.faded{opacity:.32;pointer-events:none;filter:grayscale(40%)}
+
 /* ── DROP HIGHLIGHT ── */
-.em.drop-hi .minion{outline:3px solid #5588ff;outline-offset:2px}
-.hero.drop-hi{border-color:#5588ff!important;box-shadow:0 0 16px rgba(85,136,255,.6)!important}
+.em.drop-hi .minion{outline:3px solid rgba(85,136,255,.6);outline-offset:2px}
+.hero.drop-hi{border-color:rgba(85,136,255,.6)!important;box-shadow:0 0 14px rgba(85,136,255,.5)!important}
+/* READY TO DROP state */
+.em.drop-ready .minion{outline:3px solid rgba(255,170,60,.9)!important;outline-offset:3px;animation:readyPulse .5s ease-in-out infinite}
+.hero.drop-ready{border-color:rgba(255,170,60,.9)!important;box-shadow:0 0 20px rgba(255,160,50,.7)!important;animation:readyPulse .5s ease-in-out infinite}
+@keyframes readyPulse{0%,100%{opacity:.85}50%{opacity:1}}
+
 /* ── BOARD SLOT GHOST ── */
-.board-slot-ghost{width:68px;height:88px;border:2px dashed rgba(255,255,255,0.22);border-radius:6px;flex-shrink:0;background:rgba(255,255,255,0.04);animation:slotIn .18s ease-out}
+.board-slot-ghost{width:68px;height:88px;border:2px dashed rgba(85,136,255,0.35);border-radius:6px;flex-shrink:0;background:rgba(85,136,255,0.05);animation:slotIn .18s ease-out}
 @keyframes slotIn{0%{width:0;opacity:0;margin:0;min-width:0}100%{width:68px;opacity:1}}
 
 /* ── ZOOM OVERLAY ── */
@@ -84,6 +94,17 @@ button{font-family:Georgia,serif;cursor:pointer}
 #zoom-overlay .card{transform:scale(2.4);transform-origin:center center;pointer-events:none}
 #zoom-overlay .card .cname{font-size:9px}
 #zoom-overlay .card .cdesc{font-size:7px}
+
+/* ── TOAST ── */
+#sc-toast{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);background:rgba(8,8,8,0.92);border:1px solid rgba(255,255,255,.1);padding:9px 22px;border-radius:2px;font-family:Georgia,serif;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastAnim 2s ease-out forwards}
+#sc-toast.ok{color:#88dd88;border-color:rgba(100,200,100,.3)}
+#sc-toast.warn{color:#f0ece0}
+#sc-toast.err{color:#ff8888;border-color:rgba(255,80,80,.3)}
+@keyframes toastAnim{0%{opacity:0;transform:translate(-50%,-50%) scale(.9)}12%{opacity:1;transform:translate(-50%,-50%) scale(1)}78%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.95)}}
+
+/* ── END TURN BUTTON HINT ── */
+.end-btn-hint{animation:endHint 1.6s ease-in-out infinite}
+@keyframes endHint{0%,100%{box-shadow:none}50%{box-shadow:0 0 20px rgba(240,236,224,.55)}}
 
 /* ── LOG PANEL ── */
 .gamelog-wrap{position:absolute;right:8px;top:8px;bottom:8px;width:162px;z-index:10}
@@ -247,7 +268,7 @@ let lpTimer=null;
 let listenersAdded=false;
 
 // ── HTML HELPERS ──────────────────────
-const hCard=(c,sel,faded,sm)=>`<div class="card${sm?" sm":""}${sel?" sel":""}${faded?" faded":""}">
+const hCard=(c,sel,faded,sm,glow=false)=>`<div class="card${sm?" sm":""}${sel?" sel":""}${faded?" faded":""}${glow?" playable":""}">
   <div class="cost">${c.cost}</div><div class="csym">${c.sym}</div><div class="cname">${c.name}</div>
   ${c.type==="minion"?`<div class="catk">${c.atk}</div><div class="chp">${c.hp}</div>`:`<div class="cdesc">${c.desc||""}</div>`}
 </div>`;
@@ -269,8 +290,9 @@ const hFan=(hand,selIdx,mana,lastDrawnUid)=>{
   hand.forEach((c,i)=>{
     const ang=n>1?(i-(n-1)/2)*step:0,isSel=selIdx===i,cp=c.cost<=mana,isNew=c.uid===lastDrawnUid;
     const delay=(i*0.18).toFixed(2);
+    // Use blue glow for playable, no fading for unplayable
     sl+=`<div class="hs" data-hi="${i}" style="left:${i*ov}px;transform-origin:bottom center;transform:rotate(${ang}deg) translateY(${isSel?-24:0}px);z-index:${isSel?60:i};transition:transform .15s">
-      <div class="card-fw${isNew?" new-card":""}" style="--fd:-${delay}s">${hCard(c,isSel,!cp,false)}</div>
+      <div class="card-fw${isNew?" new-card":""}" style="--fd:-${delay}s">${hCard(c,isSel,false,false,cp&&!isSel)}</div>
     </div>`;
   });
   return`<div style="position:relative;width:${tw}px;height:120px">${sl}</div>`;
@@ -370,7 +392,7 @@ function showBattle(){
       ${modeH}
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
         ${canTgt&&isP?`<button id="bcn" style="padding:8px 14px;background:none;border:1px solid #222;color:#555;font-size:10px">取消</button>`:""}
-        <button id="bet" style="padding:10px 22px;background:${isP?"#f0ece0":"#111"};color:${isP?"#000":"#2a2a2a"};border:none;font-size:12px;letter-spacing:3px;transition:background .2s;cursor:${isP?"pointer":"default"}">結束回合</button>
+        <button id="bet" style="padding:10px 22px;background:${isP?"#f0ece0":"#111"};color:${isP?"#000":"#2a2a2a"};border:none;font-size:12px;letter-spacing:3px;transition:background .2s;cursor:${isP?"pointer":"default"}" class="${(isP&&!pl.hand.some(c=>c.cost<=pl.mana)&&!pl.board.some(m=>!m.sick&&!m.attacked))?"end-btn-hint":""}">結束回合</button>
         <button id="bsv" style="padding:10px 12px;background:none;border:1px solid #1a1a1a;color:#2a2a2a;font-size:10px">投降</button>
       </div>
     </div>
@@ -489,10 +511,31 @@ function onDocUp(e){
   drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,wasLongPress:false,insertSlot:null};
   if(type==="hand"){
     if(!wasDragging&&!zoomOpen){act({t:"HC",i:savedCard});}
-    else if(wasDragging){const el=document.elementFromPoint(p.x,p.y);if(el)handleHandDrop(savedCard,savedSlot,el);}
+    else if(wasDragging){
+      const p2=p; // reuse p
+      // For spells, try proximity-first then elementFromPoint
+      const card=GAME&&GAME.player.hand[savedCard];
+      if(card&&card.type!=="minion"&&(card.effect==="dmg"||card.effect==="drain")){
+        const closest=findClosestTarget(p2.x,p2.y);
+        if(closest&&closest.dist<READY*1.4){
+          const em=closest.el.closest(".em"),eh=closest.el.id==="eh"?closest.el:null;
+          if(em){GAME={...GAME,selCard:savedCard,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});return;}
+          if(eh){GAME={...GAME,selCard:savedCard,mode:"targeting"};act({t:"EH"});return;}
+        }
+      }
+      const el=document.elementFromPoint(p.x,p.y);
+      if(el)handleHandDrop(savedCard,savedSlot,el);
+    }
   } else if(type==="board"){
     if(!wasDragging){act({t:"OM",i:savedBoard});}
     else{
+      // Proximity-first for board attacks
+      const closest=findClosestTarget(p.x,p.y);
+      if(closest&&closest.dist<READY*1.4){
+        const em=closest.el.closest(".em"),eh=closest.el.id==="eh"?closest.el:null;
+        if(em){act({t:"BOARD_ATK",bi:savedBoard,tw:"ai",ti:+em.dataset.ei});return;}
+        if(eh){act({t:"BOARD_ATK",bi:savedBoard,tw:"ai",ti:-1});return;}
+      }
       const el=document.elementFromPoint(p.x,p.y);
       if(el){
         const em=el.closest(".em"),eh=el.closest("#eh");
@@ -529,31 +572,54 @@ function updateBoardSlots(insertSlot){
 
 // ── PROXIMITY ARROW ───────────────────
 let arrowEl=null;
-const PROX=120;
+const PROX=130, READY=72;
 function updateProximityArrow(fx,fy){
   const targets=[];
   if(drag.type==="hand"){
     const card=GAME&&GAME.player.hand[drag.cardIdx];
     if(!card||card.type==="minion"||(card.effect!=="dmg"&&card.effect!=="drain"))return;
-    document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();targets.push({x:r.left+r.width/2,y:r.top+r.height/2});});
-    const eh=document.getElementById("eh");if(eh){const r=eh.getBoundingClientRect();targets.push({x:r.left+r.width/2,y:r.top+r.height/2});}
+    document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();targets.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
+    const eh=document.getElementById("eh");if(eh){const r=eh.getBoundingClientRect();targets.push({el:eh,x:r.left+r.width/2,y:r.top+r.height/2});}
   } else if(drag.type==="board"){
-    document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();targets.push({x:r.left+r.width/2,y:r.top+r.height/2});});
-    const eh=document.getElementById("eh");if(eh){const r=eh.getBoundingClientRect();targets.push({x:r.left+r.width/2,y:r.top+r.height/2});}
+    document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();targets.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
+    const eh=document.getElementById("eh");if(eh){const r=eh.getBoundingClientRect();targets.push({el:eh,x:r.left+r.width/2,y:r.top+r.height/2});}
   }
-  const near=targets.filter(t=>Math.sqrt((t.x-fx)**2+(t.y-fy)**2)<PROX);
+  // Clear old ready states
+  document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));
+  const near=targets.filter(t=>{t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);return t.dist<PROX;});
   if(!near.length){hideArrow();return;}
   if(!arrowEl){arrowEl=document.createElement("div");arrowEl.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:997";document.body.appendChild(arrowEl);}
   let paths="";
   near.forEach(to=>{
-    const dx=to.x-fx,dy=to.y-fy,len=Math.sqrt(dx*dx+dy*dy);if(len<10)return;
-    const mx=(fx+to.x)/2-dy*0.2,my=(fy+to.y)/2+dx*0.2;
-    paths+=`<path d="M${fx},${fy} Q${mx},${my} ${to.x},${to.y}" stroke="rgba(255,220,60,.9)" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#ah)"/>`;
-    paths+=`<circle cx="${to.x}" cy="${to.y}" r="22" fill="none" stroke="rgba(255,220,60,.4)" stroke-width="2"/>`;
+    const{x:tx,y:ty,dist}=to;
+    const isReady=dist<READY;
+    if(isReady) to.el.classList.add("drop-ready");
+    const gradId=`g${Math.round(tx)}${Math.round(ty)}`;
+    const c1=isReady?"rgba(255,165,50,0.4)":"rgba(160,65,15,0.35)";
+    const c2=isReady?"rgba(255,175,60,1)":"rgba(210,90,25,0.92)";
+    const cx=(fx+tx)/2-((ty-fy)*0.18),cy=(fy+ty)/2+((tx-fx)*0.18);
+    paths+=`<defs><linearGradient id="${gradId}" x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="${c1}"/>
+      <stop offset="100%" stop-color="${c2}"/>
+    </linearGradient></defs>`;
+    paths+=`<path d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}" stroke="url(#${gradId})" stroke-width="${isReady?4.5:3.5}" fill="none" stroke-linecap="round" marker-end="url(#ah)"/>`;
+    if(isReady) paths+=`<circle cx="${tx}" cy="${ty}" r="26" fill="rgba(255,165,50,.12)" stroke="rgba(255,165,50,.6)" stroke-width="2"/>`;
   });
-  arrowEl.innerHTML=`<svg width="100%" height="100%" overflow="visible" style="position:absolute;inset:0"><defs><marker id="ah" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto"><polygon points="0 0,12 4,0 8" fill="rgba(255,220,60,1)"/></marker></defs>${paths}</svg>`;
+  arrowEl.innerHTML=`<svg width="100%" height="100%" overflow="visible" style="position:absolute;inset:0"><defs><marker id="ah" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto"><polygon points="0 0,12 4,0 8" fill="${near.some(t=>t.dist<READY)?"rgba(255,175,60,1)":"rgba(200,85,20,.95)"}"/></marker></defs>${paths}</svg>`;
 }
-function hideArrow(){if(arrowEl){arrowEl.remove();arrowEl=null;}}
+function hideArrow(){
+  document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));
+  if(arrowEl){arrowEl.remove();arrowEl=null;}
+}
+
+function findClosestTarget(fx,fy){
+  const targets=[];
+  document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();targets.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
+  const eh=document.getElementById("eh");if(eh){const r=eh.getBoundingClientRect();targets.push({el:eh,x:r.left+r.width/2,y:r.top+r.height/2});}
+  let best=null,minD=Infinity;
+  targets.forEach(t=>{const d=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);if(d<minD){minD=d;best={...t,dist:d};}});
+  return best;
+}
 
 function handleHandDrop(cardIdx,insertSlot,el){
   if(!GAME||GAME.turn!=="player")return;
@@ -583,18 +649,40 @@ function showZoom(cardIdx){
 }
 function hideZoom(){const z=document.getElementById("zoom-overlay");if(z)z.remove();}
 
+// ── TOAST SYSTEM ──────────────────────
+function toast(msg, type='warn'){
+  const old=document.getElementById('sc-toast');if(old)old.remove();
+  const el=document.createElement('div');
+  el.id='sc-toast';el.className=type;el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{if(document.getElementById('sc-toast')===el)el.remove();},2000);
+}
+
 // ── DISPATCH ──────────────────────────
 function act(a){
   if(!GAME||GAME.over||GAME.turn!=="player")return;
   const g=GAME;
   if(a.t==="HC"){
-    const card=g.player.hand[a.i];if(!card||card.cost>g.player.mana)return;
-    if(card.type==="minion"){if(g.player.board.length>=7)return;GAME={...playM(g,a.i,"player"),selCard:null,selAtk:null,mode:"default"};}
-    else if(card.effect==="heal"||card.effect==="draw"){GAME={...castS(g,a.i,"player","player",-1),selCard:null,selAtk:null,mode:"default"};}
-    else{GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};}
+    const card=g.player.hand[a.i];
+    if(!card){return;}
+    if(card.cost>g.player.mana){toast("魔力不足！","err");return;}
+    if(card.type==="minion"){
+      if(g.player.board.length>=7){toast("戰場已滿！","err");return;}
+      GAME={...playM(g,a.i,"player"),selCard:null,selAtk:null,mode:"default"};
+    } else if(card.effect==="heal"||card.effect==="draw"){
+      GAME={...castS(g,a.i,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
+    } else{
+      GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};
+    }
   }else if(a.t==="OM"){
     if(g.mode==="targeting"){GAME={...g,selCard:null,mode:"default"};}
-    else{const m=g.player.board[a.i];if(!m||m.sick||m.attacked)return;GAME=g.selAtk===a.i?{...g,selAtk:null,mode:"default"}:{...g,selAtk:a.i,mode:"attacking",selCard:null};}
+    else{
+      const m=g.player.board[a.i];
+      if(!m)return;
+      if(m.sick){toast("召喚後不能立即攻擊","warn");return;}
+      if(m.attacked){toast("此隨從本回合已行動","warn");return;}
+      GAME=g.selAtk===a.i?{...g,selAtk:null,mode:"default"}:{...g,selAtk:a.i,mode:"attacking",selCard:null};
+    }
   }else if(a.t==="EM"){
     if(g.mode==="targeting"&&g.selCard!=null){GAME={...castS(g,g.selCard,"player","ai",a.i),selCard:null,selAtk:null,mode:"default"};}
     else if(g.mode==="attacking"&&g.selAtk!=null){GAME={...atkF(g,"player",g.selAtk,"ai",a.i),selAtk:null,mode:"default"};}
@@ -602,13 +690,18 @@ function act(a){
     if(g.mode==="targeting"&&g.selCard!=null){GAME={...castS(g,g.selCard,"player","ai",-1),selCard:null,selAtk:null,mode:"default"};}
     else if(g.mode==="attacking"&&g.selAtk!=null){GAME={...atkF(g,"player",g.selAtk,"ai",-1),selAtk:null,mode:"default"};}
   }else if(a.t==="HC_AT"){
-    // Play minion at specific board slot
-    const card=g.player.hand[a.i];if(!card||card.cost>g.player.mana||card.type!=="minion"||g.player.board.length>=7)return;
+    const card=g.player.hand[a.i];if(!card){return;}
+    if(card.cost>g.player.mana){toast("魔力不足！","err");return;}
+    if(card.type!=="minion")return;
+    if(g.player.board.length>=7){toast("戰場已滿！","err");return;}
     const slot=Math.min(Math.max(0,a.slot??g.player.board.length),g.player.board.length);
     const minion={...card,uid:uid(),curHp:card.hp,sick:true,attacked:false};
     const board=[...g.player.board];board.splice(slot,0,minion);
     GAME={...alog({...g,player:{...g.player,mana:g.player.mana-card.cost,hand:g.player.hand.filter((_,i)=>i!==a.i),board}},`⚔️ 你召：${card.name}`),selCard:null,selAtk:null,mode:"default"};
   }else if(a.t==="BOARD_ATK"){
+    const m=g.player.board[a.bi];
+    if(m&&m.sick){toast("召喚後不能立即攻擊","warn");return;}
+    if(m&&m.attacked){toast("此隨從本回合已行動","warn");return;}
     GAME={...atkF(g,"player",a.bi,a.tw,a.ti),selAtk:null,mode:"default"};
   }else if(a.t==="CL"){GAME={...g,selCard:null,selAtk:null,mode:"default"};
   }else if(a.t==="ET"){GAME=startT({...g,selCard:null,selAtk:null,mode:"default"},"ai");}
@@ -617,11 +710,17 @@ function act(a){
 
 // ── ROUTER ────────────────────────────
 const R=()=>document.getElementById("root");
+let _lastTurn=null;
 function render(){
   if(SCR==="menu")showMenu();
   else if(SCR==="deck")showDeck();
   else if(SCR==="battle"&&GAME)showBattle();
-  // Clear draw-anim flags after animation plays (~500ms) so re-renders don't re-trigger
+  // Turn-start toast
+  if(GAME&&!GAME.over&&GAME.turn==="player"&&_lastTurn!=="player"){
+    setTimeout(()=>toast("你的回合！","ok"),120);
+  }
+  _lastTurn=GAME?.turn??null;
+  // Clear draw-anim flags after animation plays
   if(GAME&&(GAME.lastDrawnUid||GAME.aiNewCard)){
     setTimeout(()=>{if(GAME)GAME={...GAME,lastDrawnUid:null,aiNewCard:false};},520);
   }
