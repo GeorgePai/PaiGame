@@ -1,0 +1,779 @@
+import { useState, useEffect } from “react”;
+
+/* ═══════════════════════════════════════════════════
+CARD DEFINITIONS
+═══════════════════════════════════════════════════ */
+const CARD_DEFS = [
+{ id:“m01”, name:“暗影精靈”,  cost:1, type:“minion”, atk:1, hp:2, sym:“◈”, desc:”” },
+{ id:“m02”, name:“黑暗斥候”,  cost:2, type:“minion”, atk:2, hp:2, sym:“◉”, desc:”” },
+{ id:“m03”, name:“虛空幻影”,  cost:2, type:“minion”, atk:3, hp:1, sym:“◐”, desc:”” },
+{ id:“m04”, name:“骨弓射手”,  cost:3, type:“minion”, atk:2, hp:3, sym:“◎”, desc:”” },
+{ id:“m05”, name:“符文劍客”,  cost:3, type:“minion”, atk:3, hp:2, sym:“⬡”, desc:”” },
+{ id:“m06”, name:“虛空行者”,  cost:3, type:“minion”, atk:2, hp:4, sym:“◆”, desc:”” },
+{ id:“m07”, name:“虛空騎士”,  cost:4, type:“minion”, atk:3, hp:4, sym:“◇”, desc:”” },
+{ id:“m08”, name:“死亡守衛”,  cost:4, type:“minion”, atk:2, hp:6, sym:“⬟”, desc:”” },
+{ id:“m09”, name:“石甲魔像”,  cost:5, type:“minion”, atk:4, hp:5, sym:“⬠”, desc:”” },
+{ id:“m10”, name:“暗影法師”,  cost:5, type:“minion”, atk:4, hp:4, sym:“◑”, desc:”” },
+{ id:“m11”, name:“死神使者”,  cost:6, type:“minion”, atk:5, hp:4, sym:“◓”, desc:”” },
+{ id:“m12”, name:“黑暗元素”,  cost:6, type:“minion”, atk:5, hp:6, sym:“◒”, desc:”” },
+{ id:“m13”, name:“暗影巨龍”,  cost:7, type:“minion”, atk:6, hp:5, sym:“◭”, desc:”” },
+{ id:“m14”, name:“古代巨神”,  cost:8, type:“minion”, atk:7, hp:8, sym:“◬”, desc:”” },
+{ id:“s01”, name:“暗影箭”,    cost:1, type:“spell”, effect:“dmg”,   val:2, sym:“✦”, desc:“造成2點傷害” },
+{ id:“s02”, name:“黑暗儀式”,  cost:2, type:“spell”, effect:“draw”,  val:2, sym:“✧”, desc:“抽2張牌” },
+{ id:“s03”, name:“黑暗護盾”,  cost:2, type:“spell”, effect:“heal”,  val:8, sym:“✩”, desc:“恢復8點生命” },
+{ id:“s04”, name:“虛空爆破”,  cost:3, type:“spell”, effect:“dmg”,   val:4, sym:“✪”, desc:“造成4點傷害” },
+{ id:“s05”, name:“吸魂術”,    cost:4, type:“spell”, effect:“drain”, val:5, sym:“✫”, desc:“吸取5點生命” },
+{ id:“s06”, name:“混沌衝擊”,  cost:5, type:“spell”, effect:“dmg”,   val:7, sym:“✬”, desc:“造成7點傷害” },
+];
+
+const getCardDef = id => CARD_DEFS.find(c => c.id === id);
+
+const DEFAULT_DECK = [
+“m01”,“m01”,“s01”,“s01”,
+“m02”,“m02”,“m03”,“m03”,“s02”,“s03”,
+“m04”,“m04”,“s04”,“m05”,“m05”,
+“m07”,“m07”,“m08”,“s05”,“m06”,
+“m06”,“m09”,“m09”,“m10”,“m11”,
+“m12”,“s06”,“m13”,“m14”,“m14”,
+];
+
+/* ═══════════════════════════════════════════════════
+UTILITIES
+═══════════════════════════════════════════════════ */
+const shuffle = a => {
+const b = […a];
+for (let i = b.length - 1; i > 0; i–) {
+const j = 0 | (Math.random() * (i + 1));
+[b[i], b[j]] = [b[j], b[i]];
+}
+return b;
+};
+
+let _uid = 0;
+const mkuid = () => ++_uid;
+const mkCard = def => ({ …def, uid: mkuid(), curHp: def.hp || 0, sick: true, attacked: false });
+const addLog = (s, msg) => ({ …s, log: [msg, …s.log.slice(0, 29)] });
+const checkWin = s => {
+if (s.player.hp <= 0 && s.ai.hp <= 0) return { …s, over: “draw” };
+if (s.player.hp <= 0) return { …s, over: “lose” };
+if (s.ai.hp <= 0)     return { …s, over: “win” };
+return s;
+};
+
+/* ═══════════════════════════════════════════════════
+GAME LOGIC  (pure: return new state, never mutate)
+═══════════════════════════════════════════════════ */
+const drawOne = (s, who) => {
+const p = s[who];
+if (p.deck.length === 0) {
+const ns = { …s, [who]: { …p, hp: p.hp - 5 } };
+return checkWin(addLog(ns, `💀 ${who === "player" ? "你" : "電腦"}牌庫已空！貪婪詛咒 -5 HP`));
+}
+const [drawn, …rest] = p.deck;
+if (p.hand.length >= 10) {
+return addLog({ …s, [who]: { …p, deck: rest } }, `🔥 ${drawn.name} 被燒毀（手牌已滿）`);
+}
+const ns = { …s, [who]: { …p, deck: rest, hand: […p.hand, drawn] } };
+return who === “player” ? addLog(ns, `🃏 抽牌：${drawn.name}`) : ns;
+};
+
+const startTurn = (s0, who) => {
+const p = s0[who];
+const newMax = Math.min(10, p.maxMana + 1);
+let s = {
+…s0,
+[who]: {
+…p,
+maxMana: newMax,
+mana: newMax,
+board: p.board.map(m => ({ …m, sick: false, attacked: false })),
+},
+turn: who, mode: “default”, selCard: null, selAtk: null,
+};
+s = drawOne(s, who);
+if (!s.over) s = addLog(s, `━━━ ${who === "player" ? "你的回合" : "電腦回合"} ━━━`);
+return s;
+};
+
+const playMinion = (s0, hIdx, who) => {
+const p = s0[who];
+const card = p.hand[hIdx];
+if (!card || card.type !== “minion” || p.mana < card.cost || p.board.length >= 7) return s0;
+const minion = { …card, uid: mkuid(), curHp: card.hp, sick: true, attacked: false };
+const ns = {
+…s0,
+[who]: {
+…p,
+mana: p.mana - card.cost,
+hand: p.hand.filter((_, i) => i !== hIdx),
+board: […p.board, minion],
+},
+};
+return addLog(ns, `⚔️ ${who === "player" ? "你" : "電腦"}召喚：${card.name}`);
+};
+
+const castSpell = (s0, hIdx, who, tWho, tIdx) => {
+const p = s0[who];
+const card = p.hand[hIdx];
+if (!card || card.type !== “spell” || p.mana < card.cost) return s0;
+let s = { …s0, [who]: { …p, mana: p.mana - card.cost, hand: p.hand.filter((_, i) => i !== hIdx) } };
+const { effect, val } = card;
+
+if (effect === “dmg”) {
+if (tIdx === -1) {
+s = { …s, [tWho]: { …s[tWho], hp: s[tWho].hp - val } };
+s = addLog(s, `✨ ${card.name}：對英雄造成 ${val} 傷害`);
+} else {
+const hit = s[tWho].board[tIdx];
+s = { …s, [tWho]: { …s[tWho], board: s[tWho].board.map((m, i) => i === tIdx ? { …m, curHp: m.curHp - val } : m).filter(m => m.curHp > 0) } };
+s = addLog(s, `✨ ${card.name}：對${hit.name}造成 ${val} 傷害`);
+}
+} else if (effect === “heal”) {
+s = { …s, [who]: { …s[who], hp: Math.min(100, s[who].hp + val) } };
+s = addLog(s, `💚 ${card.name}：恢復 ${val} 生命`);
+} else if (effect === “draw”) {
+s = addLog(s, `📚 ${card.name}：抽 ${val} 張牌`);
+for (let i = 0; i < val; i++) { s = drawOne(s, who); if (s.over) break; }
+} else if (effect === “drain”) {
+let actualDmg = val;
+if (tIdx === -1) {
+s = { …s, [tWho]: { …s[tWho], hp: s[tWho].hp - val } };
+} else {
+actualDmg = Math.min(val, s[tWho].board[tIdx].curHp);
+s = { …s, [tWho]: { …s[tWho], board: s[tWho].board.map((m, i) => i === tIdx ? { …m, curHp: m.curHp - val } : m).filter(m => m.curHp > 0) } };
+}
+s = { …s, [who]: { …s[who], hp: Math.min(100, s[who].hp + actualDmg) } };
+s = addLog(s, `🔮 ${card.name}：吸取 ${actualDmg} 生命`);
+}
+return checkWin(s);
+};
+
+const doAttack = (s0, who, atkIdx, tWho, tIdx) => {
+const atk = s0[who].board[atkIdx];
+if (!atk || atk.sick || atk.attacked) return s0;
+if (tIdx === -1) {
+let s = {
+…s0,
+[who]: { …s0[who], board: s0[who].board.map((m, i) => i === atkIdx ? { …m, attacked: true } : m) },
+[tWho]: { …s0[tWho], hp: s0[tWho].hp - atk.atk },
+};
+return checkWin(addLog(s, `⚔️ ${atk.name} → 英雄 (-${atk.atk})`));
+}
+const def = s0[tWho].board[tIdx];
+const atkNewHp = atk.curHp - def.atk;
+const defNewHp = def.curHp - atk.atk;
+let s = {
+…s0,
+[who]: { …s0[who], board: s0[who].board.map((m, i) => i === atkIdx ? { …m, attacked: true, curHp: atkNewHp } : m).filter(m => m.curHp > 0) },
+[tWho]: { …s0[tWho], board: s0[tWho].board.map((m, i) => i === tIdx ? { …m, curHp: defNewHp } : m).filter(m => m.curHp > 0) },
+};
+return checkWin(addLog(s, `⚔️ ${atk.name}(${atk.atk}) vs ${def.name}(${def.atk})`));
+};
+
+/* ═══════════════════════════════════════════════════
+AI LOGIC
+═══════════════════════════════════════════════════ */
+const computeAITurn = s0 => {
+let s = s0;
+// Play cards: highest cost first
+let played = true;
+while (played && !s.over) {
+played = false;
+const ai = s.ai;
+const opts = ai.hand.map((c, i) => ({ c, i })).filter(({ c }) => c.cost <= ai.mana);
+if (!opts.length) break;
+const mOpts = opts.filter(({ c }) => c.type === “minion” && ai.board.length < 7).sort((a, b) => b.c.cost - a.c.cost);
+const spOpts = opts.filter(({ c }) => c.type === “spell”).sort((a, b) => b.c.cost - a.c.cost);
+const pick = mOpts[0] || spOpts[0];
+if (!pick) break;
+if (pick.c.type === “minion”) {
+s = playMinion(s, pick.i, “ai”);
+} else {
+const { c, i } = pick;
+let tWho = “player”, tIdx = -1;
+if (c.effect === “dmg” || c.effect === “drain”) {
+const pb = s.player.board;
+if (pb.length > 0) { tIdx = pb.findIndex(m => m.curHp <= c.val); if (tIdx < 0) tIdx = 0; tWho = “player”; }
+else { tWho = “player”; tIdx = -1; }
+} else if (c.effect === “heal”) { tWho = “ai”; tIdx = -1; }
+s = castSpell(s, i, “ai”, tWho, tIdx);
+}
+if (!s.over) played = true;
+}
+// Attack with minions (track by uid for safety)
+if (!s.over) {
+const uids = s.ai.board.filter(m => !m.sick && !m.attacked).map(m => m.uid);
+for (const uid of uids) {
+if (s.over) break;
+const atkIdx = s.ai.board.findIndex(m => m.uid === uid);
+if (atkIdx < 0) continue;
+const pb = s.player.board;
+if (pb.length > 0) {
+const tIdx = pb.reduce((mi, m, i) => m.curHp < pb[mi].curHp ? i : mi, 0);
+s = doAttack(s, “ai”, atkIdx, “player”, tIdx);
+} else {
+s = doAttack(s, “ai”, atkIdx, “player”, -1);
+}
+}
+}
+return s;
+};
+
+/* ═══════════════════════════════════════════════════
+CREATE GAME
+═══════════════════════════════════════════════════ */
+const createGame = playerDeckIds => {
+const pDeck = shuffle(playerDeckIds).map(id => mkCard(getCardDef(id)));
+const aDeck = shuffle(DEFAULT_DECK).map(id => mkCard(getCardDef(id)));
+const pHand = pDeck.splice(0, 2);
+const aHand = aDeck.splice(0, 2);
+let s = {
+player: { hp: 100, mana: 0, maxMana: 0, deck: pDeck, hand: pHand, board: [] },
+ai:     { hp: 100, mana: 0, maxMana: 0, deck: aDeck, hand: aHand, board: [] },
+turn: “player”, mode: “default”, selCard: null, selAtk: null,
+log: [“遊戲開始！你先手。”], over: null,
+};
+s = startTurn(s, “player”);
+return s;
+};
+
+/* ═══════════════════════════════════════════════════
+VISUAL COMPONENTS
+═══════════════════════════════════════════════════ */
+
+function CardView({ card, selected, faded, small }) {
+const w = small ? 68 : 82, h = small ? 94 : 112;
+const isMinion = card.type === “minion”;
+return (
+<div style={{
+width: w, height: h, background: “#f4f0e8”,
+border: selected ? “2px solid #ffd700” : “1px solid #1a1a1a”,
+borderRadius: 6, position: “relative”, overflow: “hidden”,
+opacity: faded ? 0.38 : 1, flexShrink: 0,
+boxShadow: selected ? “0 0 14px rgba(255,215,0,0.6)” : “0 2px 8px rgba(0,0,0,0.5)”,
+transition: “box-shadow 0.15s, opacity 0.15s”,
+fontFamily: “Georgia, serif”,
+}}>
+{/* cost gem */}
+<div style={{ position:“absolute”, top:3, left:3, width:19, height:19, borderRadius:“50%”, background:”#162a7a”, color:”#fff”, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:10, fontFamily:“monospace”, fontWeight:“bold”, zIndex:1 }}>
+{card.cost}
+</div>
+{/* symbol */}
+<div style={{ position:“absolute”, top:“28%”, left:0, right:0, textAlign:“center”, fontSize: small ? 20 : 26, color:”#1a1a1a” }}>
+{card.sym}
+</div>
+{/* name */}
+<div style={{ position:“absolute”, top: small?17:20, left:2, right:2, textAlign:“center”, fontSize: small ? 7 : 8, color:”#111”, fontWeight:“bold”, lineHeight:1.1 }}>
+{card.name}
+</div>
+{isMinion ? (
+<>
+<div style={{ position:“absolute”, bottom:3, left:3, width:15, height:15, borderRadius:“50%”, background:”#8a1e1e”, color:”#fff”, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:8, fontFamily:“monospace”, fontWeight:“bold” }}>{card.atk}</div>
+<div style={{ position:“absolute”, bottom:3, right:3, width:15, height:15, borderRadius:“50%”, background:”#1e3c8a”, color:”#fff”, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:8, fontFamily:“monospace”, fontWeight:“bold” }}>{card.hp}</div>
+</>
+) : (
+<div style={{ position:“absolute”, bottom:4, left:2, right:2, textAlign:“center”, fontSize:6, color:”#555”, lineHeight:1.3 }}>{card.desc}</div>
+)}
+</div>
+);
+}
+
+function CardBack({ small }) {
+const w = small ? 68 : 82, h = small ? 94 : 112;
+return (
+<div style={{ width:w, height:h, background:”#0d0d0d”, border:“1px solid #2a2a2a”, borderRadius:6, flexShrink:0, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+<div style={{ width:w-12, height:h-12, border:“1px solid #1e1e1e”, borderRadius:4, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+<div style={{ fontSize:22, color:”#1e1e1e” }}>◈</div>
+</div>
+</div>
+);
+}
+
+function BoardMinion({ minion, selected, glowing, onClick }) {
+const canAct = !minion.sick && !minion.attacked;
+const hpPct = minion.curHp / minion.hp;
+return (
+<div onClick={onClick} style={{
+width:68, height:88, background: selected ? “#1a1a1a” : “#f4f0e8”,
+border: selected ? “2px solid #ffd700” : glowing ? “2px dashed #cc3333” : canAct ? “2px solid #ddd” : “1px solid #444”,
+borderRadius:6, position:“relative”, cursor:“pointer”, flexShrink:0,
+opacity: minion.sick ? 0.65 : 1,
+boxShadow: selected ? “0 0 12px rgba(255,215,0,0.5)” : glowing ? “0 0 10px rgba(200,50,50,0.4)” : “0 2px 6px rgba(0,0,0,0.5)”,
+transition:“all 0.15s”, fontFamily:“Georgia, serif”,
+}}>
+<div style={{ position:“absolute”, top:2, left:0, right:0, textAlign:“center”, fontSize:7, fontWeight:“bold”, color: selected?”#ccc”:”#111”, padding:“0 3px”, lineHeight:1.2 }}>{minion.name}</div>
+<div style={{ position:“absolute”, top:“28%”, left:0, right:0, textAlign:“center”, fontSize:20, color: selected?”#aaa”:”#222” }}>{minion.sym}</div>
+{minion.sick && <div style={{ position:“absolute”, top:“52%”, left:0, right:0, textAlign:“center”, fontSize:9, color:”#777” }}>zzz</div>}
+<div style={{ position:“absolute”, bottom:3, left:3, width:15, height:15, borderRadius:“50%”, background:”#8a1e1e”, color:”#fff”, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:8, fontFamily:“monospace”, fontWeight:“bold” }}>{minion.atk}</div>
+<div style={{ position:“absolute”, bottom:3, right:3, width:15, height:15, borderRadius:“50%”, background: hpPct < 0.35 ? “#6e1414” : “#1e3c8a”, color:”#fff”, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:8, fontFamily:“monospace”, fontWeight:“bold” }}>{minion.curHp}</div>
+</div>
+);
+}
+
+function ManaBar({ current, max }) {
+return (
+<div style={{ display:“flex”, gap:3, alignItems:“center” }}>
+{Array.from({ length:10 }).map((_, i) => (
+<div key={i} style={{
+width:11, height:11, borderRadius:“50%”,
+background: i < current ? “#4477ff” : “transparent”,
+border: i < max ? `1px solid ${i < current ? "#5588ff" : "#334"}` : “1px solid #1a1a1a”,
+transition:“background 0.2s”,
+}}/>
+))}
+<span style={{ marginLeft:4, fontSize:10, color:”#555”, fontFamily:“monospace” }}>{current}/{max}</span>
+</div>
+);
+}
+
+function HeroPortrait({ hp, isAI, onClick, isTarget }) {
+const frac = hp / 100;
+const color = frac > 0.5 ? “#5a5” : frac > 0.25 ? “#aa5” : “#a44”;
+return (
+<div onClick={onClick} style={{
+width:58, height:58, borderRadius:“50%”, background:”#111”,
+border: isTarget ? “2px dashed #cc3333” : “2px solid #2a2a2a”,
+display:“flex”, flexDirection:“column”, alignItems:“center”, justifyContent:“center”,
+cursor: onClick ? “pointer” : “default”,
+boxShadow: isTarget ? “0 0 12px rgba(200,50,50,0.5)” : “none”,
+transition:“all 0.15s”, flexShrink:0,
+}}>
+<div style={{ fontSize:16 }}>{isAI ? “💀” : “🛡️”}</div>
+<div style={{ fontSize:13, fontFamily:“monospace”, fontWeight:“bold”, color }}>{hp}</div>
+</div>
+);
+}
+
+function PlayerHandFan({ hand, selIdx, onCardClick, playerMana }) {
+const n = hand.length;
+if (n === 0) return <div style={{ height:110, display:“flex”, alignItems:“center”, justifyContent:“center”, color:”#333”, fontSize:12, fontFamily:“Georgia,serif” }}>手牌為空</div>;
+const degSpread = Math.min(n * 4.5, 36);
+const step = n > 1 ? degSpread / (n - 1) : 0;
+const cardW = 82, overlap = n > 7 ? 18 : n > 5 ? 26 : 36;
+const totalW = cardW + (n - 1) * overlap;
+return (
+<div style={{ height:130, display:“flex”, justifyContent:“center”, alignItems:“flex-end”, paddingBottom:6 }}>
+<div style={{ position:“relative”, width:totalW, height:120 }}>
+{hand.map((card, i) => {
+const angle = n > 1 ? (i - (n-1)/2) * step : 0;
+const isSel = selIdx === i;
+const canPlay = card.cost <= playerMana;
+return (
+<div key={card.uid} onClick={() => onCardClick(i)} style={{
+position:“absolute”, left: i * overlap, bottom:0,
+transformOrigin:“bottom center”,
+transform: `rotate(${angle}deg) translateY(${isSel ? -24 : 0}px)`,
+zIndex: isSel ? 60 : i, transition:“transform 0.15s”, cursor:“pointer”,
+}}>
+<CardView card={card} selected={isSel} faded={!canPlay} />
+</div>
+);
+})}
+</div>
+</div>
+);
+}
+
+function AIHandFan({ count }) {
+if (count === 0) return <div style={{ height:80 }} />;
+const n = count;
+const degSpread = Math.min(n * 4.5, 36);
+const step = n > 1 ? degSpread / (n - 1) : 0;
+const cardW = 68, overlap = n > 7 ? 18 : n > 5 ? 22 : 30;
+const totalW = cardW + (n - 1) * overlap;
+return (
+<div style={{ height:84, display:“flex”, justifyContent:“center”, alignItems:“flex-start”, paddingTop:4 }}>
+<div style={{ position:“relative”, width:totalW, height:78 }}>
+{Array.from({ length:n }).map((_, i) => {
+const angle = n > 1 ? (i - (n-1)/2) * step : 0;
+return (
+<div key={i} style={{
+position:“absolute”, left: i * overlap, top:0,
+transformOrigin:“top center”,
+transform:`rotate(${angle}deg)`, zIndex:i,
+}}>
+<CardBack small />
+</div>
+);
+})}
+</div>
+</div>
+);
+}
+
+/* ═══════════════════════════════════════════════════
+MENU SCREEN
+═══════════════════════════════════════════════════ */
+function MenuScreen({ onStart, onDeck }) {
+return (
+<div style={{ minHeight:“100vh”, background:”#070707”, display:“flex”, flexDirection:“column”, alignItems:“center”, justifyContent:“center”, fontFamily:“Georgia, serif”, position:“relative”, overflow:“hidden” }}>
+{/* decorative bg */}
+<div style={{ position:“absolute”, inset:0, opacity:0.04 }}>
+{Array.from({length:12}).map((_,i) => (
+<div key={i} style={{ position:“absolute”, left:`${(i%4)*25}%`, top:`${Math.floor(i/4)*33}%`, fontSize:80, color:”#fff”, transform:`rotate(${i*30}deg)` }}>◈</div>
+))}
+</div>
+<div style={{ textAlign:“center”, marginBottom:64, position:“relative” }}>
+<div style={{ fontSize:3, color:”#222”, letterSpacing:20, marginBottom:16, fontFamily:“monospace” }}>▬▬▬▬▬▬▬▬▬</div>
+<div style={{ fontSize:48, fontWeight:“bold”, letterSpacing:10, color:”#f0ece0”, textShadow:“0 0 60px rgba(240,236,224,0.1)”, marginBottom:10 }}>
+SHADOW CARDS
+</div>
+<div style={{ fontSize:12, color:”#3a3a3a”, letterSpacing:6 }}>黑暗卡牌對戰</div>
+<div style={{ fontSize:3, color:”#222”, letterSpacing:20, marginTop:16, fontFamily:“monospace” }}>▬▬▬▬▬▬▬▬▬</div>
+</div>
+<div style={{ display:“flex”, flexDirection:“column”, gap:14, width:260, position:“relative” }}>
+{[
+{ label:“⚔  開始遊戲”, onClick: onStart, primary: true },
+{ label:“◈  我的卡牌”, onClick: onDeck,  primary: false },
+].map(({ label, onClick, primary }) => (
+<button key={label} onClick={onClick} style={{
+padding:“17px 0”, background: primary ? “#f0ece0” : “transparent”,
+color: primary ? “#0a0a0a” : “#444”,
+border: primary ? “none” : “1px solid #222”,
+borderRadius:2, fontSize:14, fontFamily:“Georgia, serif”,
+letterSpacing:4, cursor:“pointer”, transition:“all 0.2s”,
+}}
+onMouseEnter={e => { e.currentTarget.style.background = primary ? “#ddd8c8” : “#111”; e.currentTarget.style.color = primary ? “#000” : “#aaa”; }}
+onMouseLeave={e => { e.currentTarget.style.background = primary ? “#f0ece0” : “transparent”; e.currentTarget.style.color = primary ? “#0a0a0a” : “#444”; }}
+>
+{label}
+</button>
+))}
+</div>
+<div style={{ position:“absolute”, bottom:24, fontSize:10, color:”#1e1e1e”, letterSpacing:4, fontFamily:“monospace” }}>
+{CARD_DEFS.length} CARDS IN COLLECTION
+</div>
+</div>
+);
+}
+
+/* ═══════════════════════════════════════════════════
+DECK BUILDER SCREEN
+═══════════════════════════════════════════════════ */
+function DeckBuilderScreen({ deck, onSave, onBack }) {
+const [current, setCurrent] = useState([…deck]);
+const count = (id) => current.filter(x => x === id).length;
+const total = current.length;
+const addCard = id => { if (total >= 30 || count(id) >= 2) return; setCurrent(d => […d, id]); };
+const removeCard = id => { const idx = current.lastIndexOf(id); if (idx < 0) return; setCurrent(d => { const n=[…d]; n.splice(idx,1); return n; }); };
+const grouped = […current].sort((a, b) => getCardDef(a).cost - getCardDef(b).cost).reduce((acc, id) => {
+const last = acc[acc.length - 1];
+if (last && last.id === id) last.count++;
+else acc.push({ id, count: 1, c: getCardDef(id) });
+return acc;
+}, []);
+
+return (
+<div style={{ minHeight:“100vh”, background:”#070707”, color:”#f0ece0”, display:“flex”, flexDirection:“column”, fontFamily:“Georgia, serif” }}>
+<div style={{ display:“flex”, alignItems:“center”, padding:“14px 20px”, borderBottom:“1px solid #111”, background:”#0a0a0a”, gap:14 }}>
+<button onClick={onBack} style={{ background:“none”, border:“1px solid #222”, color:”#666”, padding:“6px 14px”, cursor:“pointer”, fontSize:11, fontFamily:“Georgia,serif” }}>← 返回</button>
+<span style={{ fontSize:16, letterSpacing:4 }}>我的卡牌</span>
+<div style={{ marginLeft:“auto”, display:“flex”, gap:12, alignItems:“center” }}>
+<span style={{ fontSize:12, color: total===30?”#7d7”:”#555”, fontFamily:“monospace” }}>{total}/30</span>
+<button onClick={() => onSave(current)} disabled={total!==30} style={{
+padding:“7px 18px”, background: total===30?”#f0ece0”:”#111”, color: total===30?”#000”:”#333”,
+border:“none”, cursor: total===30?“pointer”:“default”, fontSize:11, fontFamily:“Georgia,serif”, letterSpacing:2,
+}}>儲存牌組</button>
+</div>
+</div>
+<div style={{ display:“flex”, flex:1, overflow:“hidden” }}>
+{/* Card Pool */}
+<div style={{ flex:1, overflowY:“auto”, padding:16, background:”#080808” }}>
+<div style={{ fontSize:10, color:”#333”, letterSpacing:3, marginBottom:14 }}>卡牌庫（每張最多2張）</div>
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(auto-fill, minmax(100px, 1fr))”, gap:14 }}>
+{CARD_DEFS.map(card => {
+const cnt = count(card.id);
+return (
+<div key={card.id} style={{ position:“relative”, paddingBottom:22 }}>
+<CardView card={card} faded={cnt >= 2} />
+<div style={{ position:“absolute”, bottom:0, left:0, right:0, display:“flex”, justifyContent:“center”, gap:4 }}>
+<button onClick={() => removeCard(card.id)} style={{ width:22, height:20, background:”#1a1a1a”, border:“1px solid #222”, color:”#888”, cursor:“pointer”, fontSize:13, display:“flex”, alignItems:“center”, justifyContent:“center” }}>−</button>
+<div style={{ width:22, height:20, background:”#111”, border:“1px solid #222”, color:”#aaa”, fontSize:10, display:“flex”, alignItems:“center”, justifyContent:“center”, fontFamily:“monospace” }}>{cnt}</div>
+<button onClick={() => addCard(card.id)} style={{ width:22, height:20, background:”#1a1a1a”, border:“1px solid #222”, color:”#888”, cursor:“pointer”, fontSize:13, display:“flex”, alignItems:“center”, justifyContent:“center” }}>+</button>
+</div>
+</div>
+);
+})}
+</div>
+</div>
+{/* Deck list */}
+<div style={{ width:195, borderLeft:“1px solid #111”, padding:14, overflowY:“auto”, background:”#090909” }}>
+<div style={{ fontSize:10, color:”#333”, letterSpacing:3, marginBottom:14 }}>當前牌組</div>
+{grouped.map(({ id, count: cnt, c }) => (
+<div key={id} style={{ display:“flex”, alignItems:“center”, marginBottom:7, gap:6 }}>
+<span style={{ color:”#333”, fontFamily:“monospace”, fontSize:10, width:16 }}>{c.cost}</span>
+<span style={{ color:”#ccc”, fontSize:11, flex:1, letterSpacing:0.5 }}>{c.name}</span>
+<span style={{ color:”#444”, fontFamily:“monospace”, fontSize:10 }}>×{cnt}</span>
+</div>
+))}
+{total === 0 && <div style={{ color:”#1e1e1e”, fontSize:11, textAlign:“center”, marginTop:50 }}>牌組為空</div>}
+{total > 0 && total < 30 && <div style={{ marginTop:14, fontSize:10, color:”#3a3a3a”, textAlign:“center” }}>還需 {30 - total} 張</div>}
+</div>
+</div>
+</div>
+);
+}
+
+/* ═══════════════════════════════════════════════════
+BATTLE SCREEN
+═══════════════════════════════════════════════════ */
+function BattleScreen({ game, dispatch, onSurrender }) {
+const { player, ai, turn, mode, selCard, selAtk, log, over } = game;
+const isPlayerTurn = turn === “player” && !over;
+const aiThinking = turn === “ai” && !over;
+const canTarget = mode === “targeting” || mode === “attacking”;
+
+const handleHandCard = i => {
+if (!isPlayerTurn) return;
+const card = player.hand[i];
+if (!card || card.cost > player.mana) return;
+if (card.type === “minion”) {
+if (player.board.length >= 7) return;
+dispatch({ type:“PLAY_MINION”, hIdx:i });
+} else {
+if (card.effect === “heal” || card.effect === “draw”) {
+dispatch({ type:“CAST_NO_TARGET”, hIdx:i });
+} else {
+dispatch({ type:“SELECT_SPELL”, hIdx:i });
+}
+}
+};
+
+const handleOwnMinion = i => {
+if (!isPlayerTurn) return;
+if (mode === “targeting”) { dispatch({ type:“CANCEL” }); return; }
+const m = player.board[i];
+if (!m || m.sick || m.attacked) return;
+dispatch({ type:“SELECT_ATTACKER”, atkIdx:i });
+};
+
+const handleEnemyMinion = i => {
+if (!isPlayerTurn) return;
+if (mode === “targeting”) dispatch({ type:“CAST_TARGETED”, tWho:“ai”, tIdx:i });
+else if (mode === “attacking”) dispatch({ type:“ATTACK_TARGET”, tWho:“ai”, tIdx:i });
+};
+
+const handleEnemyHero = () => {
+if (!isPlayerTurn) return;
+if (mode === “targeting”) dispatch({ type:“CAST_TARGETED”, tWho:“ai”, tIdx:-1 });
+else if (mode === “attacking”) dispatch({ type:“ATTACK_TARGET”, tWho:“ai”, tIdx:-1 });
+};
+
+return (
+<div style={{ height:“100vh”, background:”#0c0c0c”, display:“flex”, flexDirection:“column”, userSelect:“none”, overflow:“hidden”, position:“relative” }}>
+
+```
+  {/* ── AI TOP BAR ── */}
+  <div style={{ flexShrink:0, padding:"8px 16px", display:"flex", alignItems:"center", gap:14, borderBottom:"1px solid #111", background:"#0e0e0e" }}>
+    <HeroPortrait hp={ai.hp} isAI isTarget={canTarget} onClick={handleEnemyHero} />
+    <div>
+      <div style={{ fontSize:10, color:"#333", letterSpacing:3, marginBottom:5, fontFamily:"Georgia,serif" }}>OPPONENT</div>
+      <ManaBar current={ai.mana} max={ai.maxMana} />
+      <div style={{ marginTop:4, fontSize:9, color:"#2a2a2a", fontFamily:"monospace" }}>
+        手牌 {ai.hand.length} &nbsp;|&nbsp; 牌庫 {ai.deck.length}
+      </div>
+    </div>
+    {aiThinking && (
+      <div style={{ marginLeft:"auto", fontSize:11, color:"#2e2e2e", fontFamily:"Georgia,serif", letterSpacing:3, fontStyle:"italic" }}>
+        電腦思考中...
+      </div>
+    )}
+  </div>
+
+  {/* ── AI HAND (card backs) ── */}
+  <div style={{ flexShrink:0, height:88, display:"flex", justifyContent:"center", alignItems:"center", background:"#0a0a0a", borderBottom:"1px solid #0f0f0f" }}>
+    <AIHandFan count={ai.hand.length} />
+  </div>
+
+  {/* ── BOARDS ── */}
+  <div style={{ flex:1, display:"flex", flexDirection:"column", position:"relative", minHeight:0 }}>
+    {/* AI board */}
+    <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#0e0e0e", padding:"6px 8px", minHeight:100 }}>
+      {ai.board.length === 0
+        ? <div style={{ color:"#1a1a1a", fontSize:11, fontFamily:"Georgia,serif", letterSpacing:3 }}>電腦戰場</div>
+        : ai.board.map((m, i) => (
+          <BoardMinion key={m.uid} minion={m} glowing={canTarget} onClick={() => handleEnemyMinion(i)} />
+        ))
+      }
+    </div>
+
+    {/* divider */}
+    <div style={{ height:1, background:"#181818", position:"relative" }}>
+      <div style={{ position:"absolute", left:"50%", top:-8, transform:"translateX(-50%)", fontSize:8, color:"#1e1e1e", letterSpacing:6, whiteSpace:"nowrap", fontFamily:"monospace" }}>
+        ── BATTLEFIELD ──
+      </div>
+    </div>
+
+    {/* Player board */}
+    <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#0e0e0e", padding:"6px 8px", minHeight:100 }}>
+      {player.board.length === 0
+        ? <div style={{ color:"#1a1a1a", fontSize:11, fontFamily:"Georgia,serif", letterSpacing:3 }}>你的戰場</div>
+        : player.board.map((m, i) => (
+          <BoardMinion key={m.uid} minion={m} selected={selAtk === i} onClick={() => handleOwnMinion(i)} />
+        ))
+      }
+    </div>
+
+    {/* Game log */}
+    <div style={{
+      position:"absolute", right:8, top:8, bottom:8, width:162,
+      background:"rgba(0,0,0,0.75)", border:"1px solid #0f0f0f",
+      padding:"8px 10px", overflowY:"auto", borderRadius:2,
+      fontFamily:"monospace", fontSize:9, color:"#3a3a3a",
+      display:"flex", flexDirection:"column", gap:3,
+    }}>
+      {log.map((l, i) => (
+        <div key={i} style={{ borderBottom:"1px solid #0a0a0a", paddingBottom:3, color: i === 0 ? "#555" : "#2a2a2a" }}>{l}</div>
+      ))}
+    </div>
+  </div>
+
+  {/* ── PLAYER HAND ── */}
+  <div style={{ flexShrink:0, height:128, background:"#090909", borderTop:"1px solid #111", overflow:"visible" }}>
+    <PlayerHandFan hand={player.hand} selIdx={selCard} onCardClick={handleHandCard} playerMana={player.mana} />
+  </div>
+
+  {/* ── PLAYER BOTTOM BAR ── */}
+  <div style={{ flexShrink:0, padding:"8px 16px", display:"flex", alignItems:"center", gap:14, borderTop:"1px solid #111", background:"#0e0e0e" }}>
+    <HeroPortrait hp={player.hp} isAI={false} />
+    <div>
+      <div style={{ fontSize:10, color:"#333", letterSpacing:3, marginBottom:5, fontFamily:"Georgia,serif" }}>YOU</div>
+      <ManaBar current={player.mana} max={player.maxMana} />
+      <div style={{ marginTop:4, fontSize:9, color:"#2a2a2a", fontFamily:"monospace" }}>
+        手牌 {player.hand.length} &nbsp;|&nbsp; 牌庫 {player.deck.length}
+      </div>
+    </div>
+    {/* mode hint */}
+    {mode === "targeting" && (
+      <div style={{ marginLeft:8, fontSize:10, color:"#666", fontFamily:"Georgia,serif", fontStyle:"italic" }}>→ 選擇目標</div>
+    )}
+    {mode === "attacking" && (
+      <div style={{ marginLeft:8, fontSize:10, color:"#666", fontFamily:"Georgia,serif", fontStyle:"italic" }}>→ 選擇攻擊目標</div>
+    )}
+    <div style={{ marginLeft:"auto", display:"flex", gap:10, alignItems:"center" }}>
+      {(mode === "targeting" || mode === "attacking") && (
+        <button onClick={() => dispatch({ type:"CANCEL" })} style={{ padding:"8px 14px", background:"none", border:"1px solid #222", color:"#555", cursor:"pointer", fontSize:10, fontFamily:"Georgia,serif" }}>取消</button>
+      )}
+      <button onClick={() => isPlayerTurn && dispatch({ type:"END_TURN" })} disabled={!isPlayerTurn} style={{
+        padding:"10px 22px",
+        background: isPlayerTurn ? "#f0ece0" : "#111",
+        color: isPlayerTurn ? "#000" : "#2a2a2a",
+        border:"none", cursor: isPlayerTurn ? "pointer" : "default",
+        fontFamily:"Georgia,serif", fontSize:12, letterSpacing:3,
+        transition:"background 0.2s",
+      }}>
+        結束回合
+      </button>
+      <button onClick={onSurrender} style={{ padding:"10px 12px", background:"none", border:"1px solid #1a1a1a", color:"#2a2a2a", cursor:"pointer", fontSize:10, fontFamily:"Georgia,serif" }}>投降</button>
+    </div>
+  </div>
+
+  {/* ── GAME OVER OVERLAY ── */}
+  {over && (
+    <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.88)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Georgia, serif" }}>
+      <div style={{ fontSize:52, marginBottom:12 }}>{over==="win"?"⚔️":over==="lose"?"💀":"⚖️"}</div>
+      <div style={{ fontSize:32, letterSpacing:10, color:"#f0ece0", marginBottom:8 }}>{over==="win"?"勝利":over==="lose"?"失敗":"平局"}</div>
+      <div style={{ fontSize:13, color:"#3a3a3a", marginBottom:50, letterSpacing:2 }}>
+        {over==="win"?"黑暗勢力已被消滅":over==="lose"?"你被黑暗所吞噬":"雙方同歸於盡"}
+      </div>
+      <button onClick={onSurrender} style={{ padding:"13px 40px", background:"#f0ece0", color:"#000", border:"none", cursor:"pointer", fontSize:14, fontFamily:"Georgia,serif", letterSpacing:4 }}>
+        返回主選單
+      </button>
+    </div>
+  )}
+</div>
+```
+
+);
+}
+
+/* ═══════════════════════════════════════════════════
+MAIN APP
+═══════════════════════════════════════════════════ */
+export default function App() {
+const [screen, setScreen] = useState(“menu”);
+const [playerDeck, setPlayerDeck] = useState([…DEFAULT_DECK]);
+const [game, setGame] = useState(null);
+
+// AI turn effect
+useEffect(() => {
+if (!game || game.turn !== “ai” || game.over) return;
+const t = setTimeout(() => {
+setGame(prev => {
+if (!prev || prev.turn !== “ai” || prev.over) return prev;
+let s = computeAITurn(prev);
+if (!s.over) s = startTurn(s, “player”);
+return s;
+});
+}, 1500);
+return () => clearTimeout(t);
+}, [game?.turn, game?.over]);
+
+const dispatch = action => {
+setGame(prev => {
+if (!prev || prev.over || prev.turn !== “player”) return prev;
+switch (action.type) {
+case “PLAY_MINION”: {
+let s = playMinion(prev, action.hIdx, “player”);
+return { …s, selCard:null, selAtk:null, mode:“default” };
+}
+case “CAST_NO_TARGET”: {
+const card = prev.player.hand[action.hIdx];
+const tWho = card.effect === “heal” ? “player” : “player”;
+let s = castSpell(prev, action.hIdx, “player”, tWho, -1);
+return { …s, selCard:null, selAtk:null, mode:“default” };
+}
+case “SELECT_SPELL”: {
+if (prev.selCard === action.hIdx) return { …prev, selCard:null, mode:“default” };
+return { …prev, selCard:action.hIdx, mode:“targeting”, selAtk:null };
+}
+case “CAST_TARGETED”: {
+if (prev.selCard === null) return prev;
+let s = castSpell(prev, prev.selCard, “player”, action.tWho, action.tIdx);
+return { …s, selCard:null, selAtk:null, mode:“default” };
+}
+case “SELECT_ATTACKER”: {
+if (prev.selAtk === action.atkIdx) return { …prev, selAtk:null, mode:“default” };
+return { …prev, selAtk:action.atkIdx, mode:“attacking”, selCard:null };
+}
+case “ATTACK_TARGET”: {
+if (prev.selAtk === null) return prev;
+let s = doAttack(prev, “player”, prev.selAtk, action.tWho, action.tIdx);
+return { …s, selAtk:null, mode:“default” };
+}
+case “CANCEL”:
+return { …prev, selCard:null, selAtk:null, mode:“default” };
+case “END_TURN”: {
+let s = { …prev, selCard:null, selAtk:null, mode:“default” };
+return startTurn(s, “ai”);
+}
+default: return prev;
+}
+});
+};
+
+if (screen === “menu”) return (
+<MenuScreen
+onStart={() => { setGame(createGame(playerDeck)); setScreen(“battle”); }}
+onDeck={() => setScreen(“deck”)}
+/>
+);
+
+if (screen === “deck”) return (
+<DeckBuilderScreen
+deck={playerDeck}
+onSave={d => { setPlayerDeck(d); setScreen(“menu”); }}
+onBack={() => setScreen(“menu”)}
+/>
+);
+
+if (screen === “battle” && game) return (
+<BattleScreen
+game={game}
+dispatch={dispatch}
+onSurrender={() => { setGame(null); setScreen(“menu”); }}
+/>
+);
+
+return null;
+}
