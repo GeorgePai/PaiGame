@@ -371,7 +371,15 @@ function render(){
   else if(SCR==="deck")showDeck();
   else if(SCR==="battle"&&GAME)showBattle();
 }
-render();
+try {
+  render();
+} catch(e) {
+  document.getElementById("root").innerHTML =
+    '<div style="color:#ff6666;padding:30px;font-size:14px;font-family:monospace;background:#111;min-height:100vh">'
+    + '<b>JS ERROR — please screenshot this:</b><br><br>'
+    + e.stack.replace(/\n/g,'<br>')
+    + '</div>';
+}
 </script>
 </body>
 </html>
