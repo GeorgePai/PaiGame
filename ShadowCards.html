@@ -14,7 +14,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .card{width:82px;height:112px;background:#f4f0e8;border:1px solid #222;border-radius:6px;position:relative;overflow:hidden;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.55)}
 .card.sm{width:68px;height:94px}
 .card.sel{border:2px solid #ffd700!important;box-shadow:0 0 18px rgba(255,215,0,.75)!important}
-.card.playable{border:2px solid rgba(20,105,220,.95)!important;box-shadow:0 0 12px rgba(20,100,210,.5)!important;animation:pBlue 1.8s ease-in-out infinite}
+.card.playable{border:1px solid rgba(20,105,220,.35)!important;box-shadow:0 0 22px rgba(20,130,255,.72),0 0 8px rgba(20,130,255,.5)!important;animation:pBlue 1.8s ease-in-out infinite}
 .card.faded{opacity:.22;filter:grayscale(70%);pointer-events:none}
 .cname{position:absolute;top:26px;left:2px;right:2px;text-align:center;font-size:8px;color:#111;font-weight:bold;line-height:1.1}
 .card.sm .cname{top:17px;font-size:7px}
@@ -27,7 +27,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 
 /* ── MINION ── */
 .minion{width:68px;height:88px;background:#f4f0e8;border:1px solid #444;border-radius:6px;position:relative;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.minion.can{border:2px solid rgba(20,105,220,.92)!important;box-shadow:0 0 12px rgba(20,100,210,.45)!important;animation:pBlue 1.8s ease-in-out infinite}
+.minion.can{border:1px solid rgba(20,105,220,.3)!important;box-shadow:0 0 20px rgba(20,130,255,.68),0 0 7px rgba(20,130,255,.45)!important;animation:pBlue 1.8s ease-in-out infinite}
 .minion.atk-sel{background:#1a1a1a;border:2px solid #ffd700!important;box-shadow:0 0 16px rgba(255,215,0,.65)!important;animation:none!important}
 .minion.glow{border:2px dashed #c83030!important;box-shadow:0 0 10px rgba(200,50,50,.4)!important}
 .minion.sick{opacity:.62}
@@ -110,8 +110,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 .gl{border-bottom:1px solid #0a0a0a;padding-bottom:2px;color:#3a3a3a}
 .gl.lx{color:#686868}
 
-/* ── TOAST ── */
-#sc-toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(4,4,4,.96);border:1px solid rgba(255,255,255,.08);padding:8px 22px;border-radius:2px;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastIn 2.1s ease-out forwards}
+/* ── TOAST: anchored near battlefield center-line, left side ── */
+#sc-toast{position:fixed;left:16px;top:50%;transform:translateY(-50%);background:rgba(4,4,4,.96);border:1px solid rgba(255,255,255,.08);padding:7px 18px;border-radius:2px;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastIn 2.1s ease-out forwards}
 #sc-toast.ok{color:#78e878;border-color:rgba(80,200,80,.3)}
 #sc-toast.warn{color:#e8e4d8}
 #sc-toast.err{color:#ff7060;border-color:rgba(255,70,60,.3)}
@@ -294,27 +294,29 @@ const svgTri=(v,fill,w,h,fs)=>{
 const svgDrop=(v,fill,tf,w,h,fs)=>{const cy=h*.56,r=w/2-1;
   return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;right:2px;overflow:visible"><path d="M${w/2},1 Q${w-1},${h*.28} ${w-1},${cy} A${r},${r} 0 0,1 1,${cy} Q1,${h*.28} ${w/2},1 Z" fill="${fill}"/><path d="M${w/2},1 Q${w-1},${h*.28} ${w*.72},${cy*.52}" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.1" stroke-linecap="round"/><text x="${w/2}" y="${cy}" dominant-baseline="central" text-anchor="middle" fill="${tf}" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;};
 
-// Fix 3: hexagonal 3D gem mana (matching card badge shape)
+// Fix 3+4: hexagonal 3D gem mana — flat-top regular hexagon
 function hMana(cur,max){
-  const hexPts="6.5,0 13,3.5 13,9.5 6.5,13 0,9.5 0,3.5"; // regular hex in 13×13
-  const hiPts="6.5,0 13,3.5 8.5,5.6 4.5,5.6";
-  const shPts="4.5,7.4 8.5,7.4 13,9.5 6.5,13 0,9.5";
+  // Flat-top hexagon: top/bottom edges horizontal, matches card badge svgHex
+  // In 14×12 viewBox: points at top-left,top-right,right,bot-right,bot-left,left
+  const hexPts="3.5,0 10.5,0 14,6 10.5,12 3.5,12 0,6";
+  const hiPts="3.5,0 10.5,0 10.5,4.5 3.5,4.5";   // top face highlight
+  const shPts="3.5,7.5 10.5,7.5 10.5,12 3.5,12";  // bottom face shadow
   let g="";
   for(let i=0;i<10;i++){
     const on=i<cur,ex=i<max;
     if(!ex){
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><polygon points="${hexPts}" fill="none" stroke="#161616" stroke-width="1"/></svg>`;
+      g+=`<svg width="14" height="12" viewBox="0 0 14 12"><polygon points="${hexPts}" fill="none" stroke="#161616" stroke-width="1"/></svg>`;
     }else if(on){
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6aacff"/><stop offset="55%" stop-color="#1c72e8"/><stop offset="100%" stop-color="#0a3d8a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#2255bb" stroke-width=".7"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.18)"/></svg>`;
+      g+=`<svg width="14" height="12" viewBox="0 0 14 12"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6aacff"/><stop offset="55%" stop-color="#1c72e8"/><stop offset="100%" stop-color="#0a3d8a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#2255bb" stroke-width=".7"/><polygon points="${hiPts}" fill="rgba(255,255,255,.22)"/><polygon points="${shPts}" fill="rgba(0,0,0,.18)"/></svg>`;
     }else{
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><polygon points="${hexPts}" fill="#111820" stroke="#1e2a3a" stroke-width=".7"/></svg>`;
+      g+=`<svg width="14" height="12" viewBox="0 0 14 12"><polygon points="${hexPts}" fill="#111820" stroke="#1e2a3a" stroke-width=".7"/></svg>`;
     }
   }
   return`<div style="display:flex;gap:2px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#4488cc;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
 }
 
 // ── HTML HELPERS ──────────────────────
-const SPELL_BG="#f5e8ee"; // Fix 5: light pink
+const SPELL_BG="#d8f0d8"; // Fix 6: medium green
 const hCard=(c,sel,faded,sm,glow)=>{
   const[hw,hh,hfs]=sm?[14,16,7]:[20,22,10];
   const[tw,th,tfs]=sm?[14,14,7]:[19,19,9];
@@ -519,11 +521,12 @@ function buildDeck(){
   </div><div class="dbody">
     <div class="pool"><div style="font-size:9px;color:#3a3a3a;letter-spacing:3px;margin-bottom:12px">點擊加入 · 長按查看</div><div class="pgrid">${pi}</div></div>
     <div class="dlist" id="dlist">
-      <div style="display:flex;align-items:center;margin-bottom:8px;gap:6px">
+      <div style="display:flex;align-items:center;margin-bottom:6px;gap:6px">
         <div style="font-size:9px;color:#3a3a3a;letter-spacing:2px;flex:1">當前牌組 <span style="color:#2a2a2a;font-size:8px">↩ 拖出移除</span></div>
         <button id="dclr" style="padding:3px 8px;background:none;border:1px solid #2a1a1a;color:#5a2a2a;font-size:9px;letter-spacing:1px;border-radius:2px">清空</button>
       </div>
-      ${li}${chart}
+      ${chart}
+      <div style="margin-top:8px">${li}</div>
     </div>
   </div></div>`;
   document.getElementById("dbk").onclick=()=>{SCR="menu";render();};
@@ -586,13 +589,13 @@ function showBattle(){
   // AI board: pass newSummonUid for summon animation
   const aiBd=ai.board.length
     ?ai.board.map((m,i)=>`<div class="em" data-ei="${i}">${hMinion(m,false,canTgt,m.uid===newSummonUid)}</div>`).join("")
-    :`<div style="color:#2e2e2e;font-size:11px;letter-spacing:3px">ENEMY FIELD</div>`;
+    :`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 敵方戰場 —</div>`;
   const plBd=pl.board.length
     ?pl.board.map((m,i)=>`<div class="om" data-oi="${i}">${hMinion(m,selAtk===i,false,m.uid===newSummonUid)}</div>`).join("")
-    :`<div style="color:#2e2e2e;font-size:11px;letter-spacing:3px">YOUR FIELD</div>`;
+    :`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 我方戰場 —</div>`;
   const logH=log.map((l,i)=>`<div class="gl${i===0?" lx":""}">${l}</div>`).join("");
-  const modeH=mode==="targeting"?`<span style="font-size:11px;color:#aaa;font-style:italic">→ 選擇目標</span>`
-    :mode==="attacking"?`<span style="font-size:11px;color:#aaa;font-style:italic">→ 選攻擊目標</span>`:"";
+  const modeH=mode==="targeting"?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選擇目標</span>`
+    :mode==="attacking"?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選攻擊目標</span>`:"";
   const canEnd=isP&&!pl.hand.some(c=>c.cost<=pl.mana)&&!pl.board.some(m=>!m.sick&&!m.attacked);
   const goH=over?`<div class="go">
     <div style="font-size:52px;margin-bottom:12px">${over==="win"?"⚔️":over==="lose"?"💀":"⚖️"}</div>
@@ -602,14 +605,15 @@ function showBattle(){
   </div>`:"";
   R().innerHTML=`<div style="height:100vh;background:#0c0c0c;display:flex;flex-direction:column;user-select:none;overflow:hidden;position:relative">
     <div class="topbar">
-      <div style="font-size:11px;color:#666;letter-spacing:2px">對手</div>
+      <div style="font-size:10px;color:#888;letter-spacing:1px">對手本回合魔力</div>
       ${hMana(ai.mana,ai.maxMana)}
-      <span style="font-size:10px;color:#555;font-family:monospace;margin-left:4px">手牌 ${ai.hand.length}/10 · 庫 ${ai.deck.length}</span>
-      ${turn==="ai"&&!over?`<span style="margin-left:auto;font-size:11px;color:#556;letter-spacing:2px;font-style:italic">思考中...</span>`:""}
+      <span style="font-size:10px;color:#666;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
+      <span style="font-size:10px;color:#555;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
+      ${turn==="ai"&&!over?`<span style="margin-left:auto;font-size:11px;color:#667;letter-spacing:2px;font-style:italic">對手思考中...</span>`:""}
     </div>
     <div class="ai-hand-wrap">${hAIFan(ai.hand.length,aiNewCard)}</div>
     <div class="hero-row top">${hHeroPort(ai.hp,true,canTgt,"ah")}
-      <span style="font-size:9px;color:#2a2a2a;font-family:monospace">場 ${ai.board.length}/7</span>
+      <span style="font-size:9px;color:#4a4a2a;font-family:monospace">場上隨從 ${ai.board.length}/7</span>
     </div>
     <div class="boards">
       <div class="brow" id="ab">${aiBd}</div>
@@ -621,15 +625,16 @@ function showBattle(){
       </div>
     </div>
     <div class="hero-row bot" style="gap:20px">${hHeroPort(pl.hp,false,false,"ph")}
-      <span style="font-size:9px;color:#2a2a2a;font-family:monospace">場 ${pl.board.length}/7</span>
+      <span style="font-size:9px;color:#4a4a2a;font-family:monospace">場上隨從 ${pl.board.length}/7</span>
       ${modeH}
     </div>
     <div class="hand-wrap" id="hw">${hFan(pl.hand,selCard,pl.mana,lastDraw)}</div>
     <div class="hand-hint-bar"><span class="hand-hint">長按放大查看 · 手牌上限 10 張 · 場上上限 7 張</span></div>
     <div class="botbar">
-      <div style="font-size:11px;color:#666;letter-spacing:2px">我方</div>
+      <div style="font-size:10px;color:#888;letter-spacing:1px">我方本回合魔力</div>
       ${hMana(pl.mana,pl.maxMana)}
-      <span style="font-size:10px;color:#555;font-family:monospace;margin-left:4px">手牌 ${pl.hand.length}/10 · 庫 ${pl.deck.length}</span>
+      <span style="font-size:10px;color:#666;font-family:monospace;margin-left:6px">手牌 ${pl.hand.length}/10</span>
+      <span style="font-size:10px;color:#555;font-family:monospace;margin-left:4px">牌庫剩餘 ${pl.deck.length}</span>
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
         ${canTgt&&isP?`<button id="bcn" style="padding:7px 12px;background:none;border:1px solid #333;color:#888;font-size:11px">取消</button>`:""}
         <button id="bet" style="padding:9px 20px;background:${isP?"#ede9dc":"#111"};color:${isP?"#000":"#444"};border:none;font-size:12px;letter-spacing:3px" class="${canEnd?"end-hint":""}">結束回合</button>
@@ -743,6 +748,11 @@ function onUp(e){
     else if(wd){
       if(invalid||card&&card.cost>GAME.player.mana){toast("魔力不足！","err");return;}
       if(card&&card.type==="minion"&&GAME.player.board.length>=7){toast("戰場已滿！","err");return;}
+      if(card&&card.type==="minion"){
+        // Fix 2: for minions, always use the slot computed during drag (avoids left-edge miss on touch)
+        const slot=ss!=null?ss:GAME.player.board.length;
+        act({t:"HC_AT",i:sc,slot});return;
+      }
       if(card&&card.type!=="minion"){const cl=closestTarget(p.x,p.y);if(cl&&cl.dist<READY*1.4){const em=cl.el.closest(".em"),isH=cl.el.id==="ah";if(em){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});return;}if(isH){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EH"});return;}}}
       const el=document.elementFromPoint(p.x,p.y);if(el)handDrop(sc,ss,el);
     }
@@ -762,7 +772,14 @@ function onUp(e){
   }
 }
 function clearDropHi(){document.querySelectorAll(".drop-hi,.drop-ready").forEach(e=>e.classList.remove("drop-hi","drop-ready"));}
-function getSlot(cx){const pb=document.getElementById("pb");if(!pb||!GAME)return 0;const oms=Array.from(pb.querySelectorAll(".om"));let slot=oms.length;for(let i=0;i<oms.length;i++){const r=oms[i].getBoundingClientRect();if(cx<r.left+r.width/2){slot=i;break;}}return slot;}
+function getSlot(cx){
+  const pb=document.getElementById("pb");if(!pb||!GAME)return 0;
+  const oms=Array.from(pb.querySelectorAll(".om"));
+  if(!oms.length)return 0; // empty board: slot 0
+  let slot=oms.length;
+  for(let i=0;i<oms.length;i++){const r=oms[i].getBoundingClientRect();if(cx<r.left+r.width/2){slot=i;break;}}
+  return slot;
+}
 function updateSlots(ins){
   const pb=document.getElementById("pb");if(!pb||!GAME)return;const pl=GAME.player;let h="";
   if(!pl.board.length){h=ins!=null?`<div class="board-slot-ghost"></div>`:`<div style="color:#181818;font-size:10px;letter-spacing:3px">YOUR FIELD</div>`;}
