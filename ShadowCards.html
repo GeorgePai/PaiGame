@@ -34,10 +34,9 @@ button{font-family:Georgia,serif;cursor:pointer}
 .minion.lunging{animation:lunge .38s cubic-bezier(.4,0,.6,1) forwards!important;z-index:50}
 .minion.dying{animation:deathBurst .44s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .42s cubic-bezier(.15,1.4,.6,1) both}
-.minion .mn{position:absolute;top:2px;left:0;right:0;text-align:center;font-size:7px;font-weight:bold;color:#111;padding:0 3px;line-height:1.2}
+.minion .mn{position:absolute;top:2px;left:0;right:0;text-align:center;font-size:7px;font-weight:bold;color:#111;padding:0 3px;line-height:1.25}
 .minion.atk-sel .mn,.minion.atk-sel .ms{color:#aaa}
-.minion .ms{position:absolute;top:24%;left:0;right:0;text-align:center;font-size:20px;color:#222}
-.minion .mz{position:absolute;top:50%;left:0;right:0;text-align:center;font-size:9px;color:#777}
+.minion .ms{position:absolute;top:28%;left:0;right:0;text-align:center;font-size:20px;color:#222}
 
 /* ── HERO PORTRAIT ── */
 .hport{position:relative;flex-shrink:0;transition:filter .15s;border-radius:50%}
@@ -55,12 +54,15 @@ button{font-family:Georgia,serif;cursor:pointer}
 @keyframes dmgFloat{0%{transform:translateY(0) scale(1.2);opacity:1}55%{opacity:.85}100%{transform:translateY(-70px) scale(.7);opacity:0}}
 @keyframes toastIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.88)}10%{opacity:1;transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(.95)}}
 @keyframes slotIn{0%{width:0;opacity:0}100%{width:68px;opacity:1}}
-@keyframes endPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 24px rgba(230,224,212,.6)}}
+@keyframes endPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 22px rgba(40,130,255,.68),0 0 8px rgba(40,130,255,.35)}}
 @keyframes rdyPulse{0%,100%{opacity:.78}50%{opacity:1}}
-@keyframes deckFly{0%{opacity:.88}100%{opacity:0;transform:translate(var(--dfx,60px),var(--dfy,0px)) scale(.35)}}
+@keyframes marchDash{0%{stroke-dashoffset:24}100%{stroke-dashoffset:0}}
+/* Marching arrow on SVG path */
+.arrow-march{stroke-dasharray:14 10;animation:marchDash .55s linear infinite}
 
 .card-fw{animation:floatCard 2.2s ease-in-out infinite;animation-delay:var(--fd,0s)}
-.card-fw.new-card{animation:flyIn .72s cubic-bezier(.2,1.2,.6,1),floatCard 2.2s .72s ease-in-out infinite;animation-delay:0s,var(--fd,0s)}
+/* flyIn plays first with forwards fill, then floatCard takes over — no transform conflict */
+.card-fw.new-card{animation:flyIn .72s cubic-bezier(.2,1.2,.6,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:0s,.72s}
 .minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:50}
 .minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
@@ -109,13 +111,16 @@ button{font-family:Georgia,serif;cursor:pointer}
 .gl.lx{color:#686868}
 
 /* ── TOAST ── */
-#sc-toast{position:fixed;left:50%;top:36%;transform:translate(-50%,-50%);background:rgba(4,4,4,.96);border:1px solid rgba(255,255,255,.08);padding:8px 22px;border-radius:2px;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastIn 2.1s ease-out forwards}
+#sc-toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(4,4,4,.96);border:1px solid rgba(255,255,255,.08);padding:8px 22px;border-radius:2px;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastIn 2.1s ease-out forwards}
 #sc-toast.ok{color:#78e878;border-color:rgba(80,200,80,.3)}
 #sc-toast.warn{color:#e8e4d8}
 #sc-toast.err{color:#ff7060;border-color:rgba(255,70,60,.3)}
 #sc-toast.ai{color:#bb99ff;border-color:rgba(140,80,255,.22)}
 .float-dmg{position:fixed;pointer-events:none;z-index:600;font-family:Georgia,serif;font-weight:bold;text-shadow:0 1px 8px rgba(0,0,0,.9);animation:dmgFloat .96s ease-out forwards}
 .end-hint{animation:endPulse 1.5s ease-in-out infinite}
+/* invalid drag: red border + glow */
+.card.invalid-drag{border:2px solid rgba(255,60,60,.9)!important;box-shadow:0 0 20px rgba(255,50,50,.65),0 0 6px rgba(255,50,50,.35) inset!important;animation:none!important}
+.minion.invalid-drag{border:2px solid rgba(255,60,60,.9)!important;box-shadow:0 0 18px rgba(255,50,50,.62),0 0 5px rgba(255,50,50,.3) inset!important;animation:none!important}
 
 /* ── ZOOM ── */
 #zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.86);display:flex;align-items:center;justify-content:center;z-index:900;cursor:pointer}
@@ -206,6 +211,33 @@ function executeAiScript(script,idx,onDone){
   if(idx>=script.length||GAME.over){onDone();return;}
   const step=script[idx];const next=()=>executeAiScript(script,idx+1,onDone);
   if(step.type==="play"){
+    if(step.card.type==="minion"&&step.newSumUid){
+      // Fix 6: animate card flying from AI hand row to board before state update
+      const aiHandWrap=document.querySelector(".ai-hand-wrap");
+      const abRow=document.getElementById("ab");
+      if(aiHandWrap&&abRow){
+        const hr=aiHandWrap.getBoundingClientRect(),br=abRow.getBoundingClientRect();
+        const flyCard=document.createElement("div");
+        flyCard.style.cssText=`position:fixed;left:${hr.left+hr.width/2-34}px;top:${hr.top+hr.height/2-47}px;pointer-events:none;z-index:800;transition:left .42s cubic-bezier(.3,1.2,.6,1),top .42s cubic-bezier(.3,1.2,.6,1),transform .42s,opacity .3s .3s`;
+        flyCard.innerHTML=hCard(step.card,false,false,true,false);
+        document.body.appendChild(flyCard);
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{
+          flyCard.style.left=(br.left+br.width/2-34)+"px";
+          flyCard.style.top=(br.top+br.height/2-44)+"px";
+          flyCard.style.transform="scale(1.1)";
+          flyCard.style.opacity="0";
+        }));
+        setTimeout(()=>{
+          flyCard.remove();
+          GAME=step.sa;
+          newSummonUid=step.newSumUid;setTimeout(()=>{newSummonUid=null;},500);
+          render();
+          setTimeout(next,480);
+        },480);
+        return;
+      }
+    }
+    // non-minion or fallback
     GAME=step.sa;
     if(step.newSumUid){newSummonUid=step.newSumUid;setTimeout(()=>{newSummonUid=null;},500);}
     render();
@@ -241,26 +273,31 @@ function lungeAtk(atkEl,defEl,onImpact,onDone){if(!atkEl||!defEl){onImpact();set
 
 // ── SVG BADGE HELPERS ─────────────────
 const svgDrop=(v,fill,tf,w,h,fs)=>{const cy=h*.56,r=w/2-1;return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;right:2px;overflow:visible"><path d="M${w/2},1 Q${w-1},${h*.28} ${w-1},${cy} A${r},${r} 0 0,1 1,${cy} Q1,${h*.28} ${w/2},1 Z" fill="${fill}"/><text x="${w/2}" y="${cy}" dominant-baseline="central" text-anchor="middle" fill="${tf}" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;};
-const svgTri=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;left:2px;overflow:visible"><polygon points="${w/2},1 ${w-1},${h-1} 1,${h-1}" fill="${fill}"/><text x="${w/2}" y="${h*.78}" dominant-baseline="central" text-anchor="middle" fill="#fff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
-// hex: true center is h/2. Use dominant-baseline=central so text centers exactly.
+// Triangle centroid is at 2/3 height from top → y = 1 + (h-1)*(2/3) ≈ h*0.68
+const svgTri=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;left:2px;overflow:visible"><polygon points="${w/2},1 ${w-1},${h-1} 1,${h-1}" fill="${fill}"/><text x="${w/2}" y="${h*.68}" dominant-baseline="central" text-anchor="middle" fill="#fff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
 const svgHex=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;top:2px;left:2px;overflow:visible"><polygon points="${w/2},0 ${w},${h*.27} ${w},${h*.73} ${w/2},${h} 0,${h*.73} 0,${h*.27}" fill="${fill}"/><text x="${w/2}" y="${h*.5}" dominant-baseline="central" text-anchor="middle" fill="#e8f4ff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
 
 // ── HTML HELPERS ──────────────────────
+const SPELL_BG="#ece8f8"; // #2 visible lavender (not too light)
 const hCard=(c,sel,faded,sm,glow)=>{
   const[hw,hh,hfs]=sm?[14,16,7]:[20,22,10];
   const[tw,th,tfs]=sm?[14,14,7]:[19,19,9];
   const[dw,dh,dfs]=sm?[12,15,7]:[17,21,9];
   const isM=c.type==="minion";
-  const typeTag=`<div style="position:absolute;top:${sm?2:3}px;right:${sm?2:3}px;background:${isM?"rgba(38,25,8,.75)":"rgba(8,18,38,.75)"};border:1px solid ${isM?"rgba(160,105,25,.5)":"rgba(35,90,185,.5)"};border-radius:2px;padding:0 ${sm?2:3}px;font-size:${sm?5:6}px;color:${isM?"#b08428":"#5888cc"};letter-spacing:.3px;font-family:monospace;line-height:1.6;pointer-events:none">${isM?"隨從":"法術"}</div>`;
-  return`<div class="card${sm?" sm":""}${sel?" sel":""}${faded?" faded":""}${glow?" playable":""}">
-  ${svgHex(c.cost,"#3c96cc",hw,hh,hfs)}${typeTag}
-  <div class="csym">${c.sym}</div><div class="cname">${c.name}</div>
+  const bg=isM?"#f4f0e8":SPELL_BG;
+  // Fix 1: type tag below card name (not top-right corner)
+  const typeTag=`<div style="position:absolute;top:${sm?18:21}px;left:0;right:0;text-align:center;font-size:${sm?5:6}px;color:${isM?"#a07828":"#7858b8"};font-family:monospace;letter-spacing:.5px;pointer-events:none">${isM?"— 隨從 —":"— 法術 —"}</div>`;
+  return`<div class="card${sm?" sm":""}${sel?" sel":""}${faded?" faded":""}${glow?" playable":""}" style="background:${bg}">
+  ${svgHex(c.cost,"#3c96cc",hw,hh,hfs)}
+  <div class="cname">${c.name}</div>${typeTag}
+  <div class="csym">${c.sym}</div>
   ${isM?svgTri(c.atk,"#d86018",tw,th,tfs)+svgDrop(c.hp,"#c22828","#ffe8e8",dw,dh,dfs):`<div class="cdesc">${c.desc||""}</div>`}
 </div>`;};
 const hBack=()=>`<div class="cardback"><div style="width:56px;height:82px;border:1px solid #1e1e1e;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#1e1e1e;font-size:22px">◈</div></div>`;
 const hMinion=(m,sel,glow,ns)=>{const can=!m.sick&&!m.attacked,lo=m.curHp/m.hp<0.35;
   return`<div class="minion${sel?" atk-sel":""}${glow?" glow":""}${can&&!sel?" can":""}${m.sick?" sick":""}${ns?" new-summon":""}">
-  <div class="mn">${m.name}</div><div class="ms">${m.sym}</div>${m.sick?`<div class="mz">zzz</div>`:""}
+  <div class="mn">${m.name}<br><span style="font-size:5px;color:#9a7820;letter-spacing:.4px;font-family:monospace">隨從</span></div>
+  <div class="ms">${m.sym}</div>
   ${svgTri(m.atk,"#d86018",17,17,8)}${svgDrop(m.curHp,lo?"#881818":"#c22828","#ffe8e8",14,18,8)}</div>`;};
 function hHeroPort(hp,isAI,tgt,id){
   const gid=id+"g";
@@ -582,8 +619,33 @@ function onMove(e){
   if(!drag.active)return;e.preventDefault();const p=pt(e),ddx=p.x-drag.startX,ddy=p.y-drag.startY;
   if(!drag.dragging&&Math.sqrt(ddx*ddx+ddy*ddy)>10){
     clearLP();const g=GAME;if(!g)return;
-    if(drag.type==="hand"){const card=g.player.hand[drag.cardIdx];if(!card)return;drag.dragging=true;if(drag.srcEl)drag.srcEl.classList.add("src-ghost");const ghost=document.createElement("div");ghost.id="drag-ghost";ghost.innerHTML=hCard(card,false,false,false,card.cost<=g.player.mana);document.body.appendChild(ghost);drag.ghost=ghost;if(card.type!=="minion"&&(card.effect==="dmg"||card.effect==="drain")){document.querySelectorAll(".em").forEach(el=>el.classList.add("drop-hi"));const ah=document.getElementById("ah");if(ah)ah.classList.add("drop-hi");}}
-    else if(drag.type==="board"){const m=g.player.board[drag.boardIdx];if(!m||m.sick||m.attacked){drag.active=false;return;}drag.dragging=true;const ghost=document.createElement("div");ghost.id="drag-ghost";ghost.style.cssText="position:fixed;pointer-events:none;z-index:999;transform:translate(-50%,-60%) rotate(-4deg);opacity:.9";ghost.innerHTML=hMinion(m,false,false,false);document.body.appendChild(ghost);drag.ghost=ghost;document.querySelectorAll(".em").forEach(el=>el.classList.add("drop-hi"));const ah=document.getElementById("ah");if(ah)ah.classList.add("drop-hi");}
+    if(drag.type==="hand"){
+      const card=g.player.hand[drag.cardIdx];if(!card)return;
+      drag.dragging=true;
+      const invalid=card.cost>g.player.mana||(card.type==="minion"&&g.player.board.length>=7);
+      drag.invalid=invalid;
+      if(drag.srcEl)drag.srcEl.classList.add("src-ghost");
+      const ghost=document.createElement("div");ghost.id="drag-ghost";
+      ghost.innerHTML=hCard(card,false,false,false,!invalid&&card.cost<=g.player.mana);
+      document.body.appendChild(ghost);drag.ghost=ghost;
+      // Red glow on ghost if invalid
+      if(invalid){const gc=ghost.querySelector(".card");if(gc)gc.classList.add("invalid-drag");}
+      if(!invalid&&card.type!=="minion"&&(card.effect==="dmg"||card.effect==="drain")){
+        document.querySelectorAll(".em").forEach(el=>el.classList.add("drop-hi"));
+        const ah=document.getElementById("ah");if(ah)ah.classList.add("drop-hi");
+      }
+    } else if(drag.type==="board"){
+      const m=g.player.board[drag.boardIdx];
+      const invalid=!m||m.sick||m.attacked;
+      if(!m){drag.active=false;return;}
+      drag.dragging=true;drag.invalid=invalid;
+      const ghost=document.createElement("div");ghost.id="drag-ghost";
+      ghost.style.cssText="position:fixed;pointer-events:none;z-index:999;transform:translate(-50%,-60%) rotate(-4deg);opacity:.9";
+      ghost.innerHTML=hMinion(m,false,false,false);
+      document.body.appendChild(ghost);drag.ghost=ghost;
+      if(invalid){const gm=ghost.querySelector(".minion");if(gm)gm.classList.add("invalid-drag");}
+      else{document.querySelectorAll(".em").forEach(el=>el.classList.add("drop-hi"));const ah=document.getElementById("ah");if(ah)ah.classList.add("drop-hi");}
+    }
   }
   if(!drag.dragging)return;if(drag.ghost){drag.ghost.style.left=p.x+"px";drag.ghost.style.top=p.y+"px";}
   const card=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
@@ -592,25 +654,34 @@ function onMove(e){
 }
 function onUp(e){
   if(!drag.active)return;clearLP();
-  const{type,dragging:wd,cardIdx:sc,boardIdx:sb,insertSlot:ss,wasLP,srcEl}=drag;
+  const{type,dragging:wd,cardIdx:sc,boardIdx:sb,insertSlot:ss,wasLP,srcEl,invalid}=drag;
   const zOpen=!!document.getElementById("zoom-overlay");
   if(srcEl)srcEl.classList.remove("src-ghost");
   if(drag.ghost){drag.ghost.remove();drag.ghost=null;}
   clearDropHi();hideArrow();updateSlots(null);hideZoom();
-  const p=pt(e,true);drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false};
+  const p=pt(e,true);drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false,invalid:false};
   if(type==="hand"){
     const card=GAME&&GAME.player.hand[sc];
     if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>GAME.player.mana){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
     else if(wd){
-      if(card&&card.cost>GAME.player.mana){toast("魔力不足！","err");return;}
+      if(invalid||card&&card.cost>GAME.player.mana){toast("魔力不足！","err");return;}
       if(card&&card.type==="minion"&&GAME.player.board.length>=7){toast("戰場已滿！","err");return;}
       if(card&&card.type!=="minion"){const cl=closestTarget(p.x,p.y);if(cl&&cl.dist<READY*1.4){const em=cl.el.closest(".em"),isH=cl.el.id==="ah";if(em){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});return;}if(isH){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EH"});return;}}}
       const el=document.elementFromPoint(p.x,p.y);if(el)handDrop(sc,ss,el);
     }
   }else if(type==="board"){
     if(!wd){act({t:"OM",i:sb});}
-    else{const cl=closestTarget(p.x,p.y);if(cl&&cl.dist<READY*1.4){const em=cl.el.closest(".em"),isH=cl.el.id==="ah";if(em){act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:+em.dataset.ei});return;}if(isH){act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:-1});return;}}
-      const el=document.elementFromPoint(p.x,p.y);if(el){const em=el.closest(".em"),ah=el.closest("#ah");if(em)act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:+em.dataset.ei});else if(ah)act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:-1});}}
+    else{
+      if(invalid){
+        // Show specific reason for invalid board drag
+        const m=GAME&&GAME.player.board[sb];
+        if(m&&m.sick)toast("此隨從下回合才能攻擊","err");
+        else if(m&&m.attacked)toast("此隨從本回合已行動","warn");
+        return;
+      }
+      const cl=closestTarget(p.x,p.y);if(cl&&cl.dist<READY*1.4){const em=cl.el.closest(".em"),isH=cl.el.id==="ah";if(em){act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:+em.dataset.ei});return;}if(isH){act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:-1});return;}}
+      const el=document.elementFromPoint(p.x,p.y);if(el){const em=el.closest(".em"),ah=el.closest("#ah");if(em)act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:+em.dataset.ei});else if(ah)act({t:"BOARD_ATK",bi:sb,tw:"ai",ti:-1});}
+    }
   }
 }
 function clearDropHi(){document.querySelectorAll(".drop-hi,.drop-ready").forEach(e=>e.classList.remove("drop-hi","drop-ready"));}
@@ -630,22 +701,33 @@ function updateProxArrow(fx,fy){
   document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
   const ah=document.getElementById("ah");if(ah){const r=ah.getBoundingClientRect();ts.push({el:ah,x:r.left+r.width/2,y:r.top+r.height/2});}
   document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));
-  const near=ts.filter(t=>{t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);return t.dist<PROX;});
-  if(!near.length){hideArrow();return;}
+  // Fix 4: only ONE closest target arrow
+  ts.forEach(t=>{t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);});
+  const best=ts.filter(t=>t.dist<PROX).sort((a,b)=>a.dist-b.dist)[0];
+  if(!best){hideArrow();return;}
   if(!arrowEl){arrowEl=document.createElement("div");arrowEl.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:997";document.body.appendChild(arrowEl);}
-  let paths="";
-  near.forEach(to=>{
-    const{x:tx,y:ty,dist}=to,rdy=dist<READY;
-    if(rdy)to.el.classList.add("drop-ready");
-    const gid="g"+(0|tx)+(0|ty);
-    const c1=rdy?"rgba(255,148,38,.38)":"rgba(145,55,8,.28)",c2=rdy?"rgba(255,168,48,1)":"rgba(195,78,14,.9)";
-    const cx=(fx+tx)/2-((ty-fy)*.18),cy=(fy+ty)/2+((tx-fx)*.18);
-    paths+=`<defs><linearGradient id="${gid}" x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs>`;
-    paths+=`<path d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}" stroke="url(#${gid})" stroke-width="${rdy?4.5:3}" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>`;
-    if(rdy)paths+=`<circle cx="${tx}" cy="${ty}" r="26" fill="rgba(255,148,38,.1)" stroke="rgba(255,148,38,.55)" stroke-width="1.8"/>`;
-  });
-  const hc=near.some(t=>t.dist<READY)?"rgba(255,168,48,1)":"rgba(190,72,12,.9)";
-  arrowEl.innerHTML=`<svg width="100%" height="100%" overflow="visible" style="position:absolute;inset:0"><defs><marker id="arh" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto"><polygon points="0 0,12 4,0 8" fill="${hc}"/></marker></defs>${paths}</svg>`;
+  const{x:tx,y:ty,dist}=best,rdy=dist<READY;
+  if(rdy)best.el.classList.add("drop-ready");
+  const col=rdy?"rgba(255,168,48,1)":"rgba(195,78,14,.92)";
+  const colFade=rdy?"rgba(255,148,38,.28)":"rgba(145,55,8,.2)";
+  // Slightly curved path
+  const cx=(fx+tx)/2-((ty-fy)*.14),cy=(fy+ty)/2+((tx-fx)*.14);
+  // Fix 5: thicker stroke (6px), smaller proportional arrowhead (8x6), marching-dash animation
+  const gid="garw";
+  arrowEl.innerHTML=`<svg width="100%" height="100%" overflow="visible" style="position:absolute;inset:0">
+    <defs>
+      <linearGradient id="${gid}" x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="${colFade}"/>
+        <stop offset="100%" stop-color="${col}"/>
+      </linearGradient>
+      <marker id="arh" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0,8 3,0 6" fill="${col}"/>
+      </marker>
+    </defs>
+    <path class="arrow-march" d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
+      stroke="url(#${gid})" stroke-width="6" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
+    ${rdy?`<circle cx="${tx}" cy="${ty}" r="24" fill="rgba(255,148,38,.1)" stroke="${col}" stroke-width="1.6"/>`:""}
+  </svg>`;
 }
 function hideArrow(){document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));if(arrowEl){arrowEl.remove();arrowEl=null;}}
 function closestTarget(fx,fy){const ts=[];document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});const ah=document.getElementById("ah");if(ah){const r=ah.getBoundingClientRect();ts.push({el:ah,x:r.left+r.width/2,y:r.top+r.height/2});}let best=null,md=Infinity;ts.forEach(t=>{const d=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);if(d<md){md=d;best={...t,dist:d};}});return best;}
