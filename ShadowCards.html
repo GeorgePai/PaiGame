@@ -48,11 +48,11 @@ button{font-family:Georgia,serif;cursor:pointer}
 /* ── ANIMATIONS ── */
 @keyframes pBlue{0%,100%{box-shadow:0 0 10px rgba(40,130,255,.26),0 2px 6px rgba(0,0,0,.4)}50%{box-shadow:0 0 28px rgba(40,130,255,.72),0 2px 6px rgba(0,0,0,.4)}}
 @keyframes floatCard{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-@keyframes flyIn{0%{transform:translateX(260px) scale(.18) rotate(15deg);opacity:0}58%{transform:translateX(-6px) scale(1.07) rotate(-1deg);opacity:1}100%{transform:translateX(0) scale(1) rotate(0);opacity:1}}
-@keyframes lunge{0%,100%{transform:translate(0,0) scale(1)}42%{transform:translate(var(--lx,0px),var(--ly,0px)) scale(1.13)}}
-@keyframes deathBurst{0%{transform:scale(1);opacity:1;filter:none}32%{transform:scale(1.5) rotate(8deg);opacity:.9;filter:brightness(3)}100%{transform:scale(0) rotate(22deg);opacity:0}}
-@keyframes minionIn{0%{transform:scale(0) translateY(-24px) rotate(-6deg);opacity:0}70%{transform:scale(1.09) translateY(2px);opacity:1}100%{transform:scale(1) translateY(0);opacity:1}}
-@keyframes dmgFloat{0%{transform:translateY(0) scale(1.1);opacity:1}65%{opacity:.75}100%{transform:translateY(-56px) scale(.8);opacity:0}}
+@keyframes flyIn{0%{transform:translateX(280px) scale(.15) rotate(18deg);opacity:0}55%{transform:translateX(-8px) scale(1.08) rotate(-1.5deg);opacity:1}100%{transform:translateX(0) scale(1) rotate(0);opacity:1}}
+@keyframes lunge{0%{transform:translate(0,0) scale(1)}40%{transform:translate(var(--lx,0px),var(--ly,0px)) scale(1.15)}75%{transform:translate(calc(var(--lx,0px)*.12),calc(var(--ly,0px)*.12)) scale(1.04)}100%{transform:translate(0,0) scale(1)}}
+@keyframes deathBurst{0%{transform:scale(1);opacity:1;filter:none}28%{transform:scale(1.6) rotate(10deg);opacity:.95;filter:brightness(3.5)}65%{transform:scale(.4) rotate(25deg);opacity:.4;filter:brightness(1.5)}100%{transform:scale(0) rotate(30deg);opacity:0}}
+@keyframes minionIn{0%{transform:scale(0) translateY(-32px) rotate(-8deg);opacity:0}60%{transform:scale(1.12) translateY(3px);opacity:1}85%{transform:scale(.97) translateY(-1px)}100%{transform:scale(1) translateY(0);opacity:1}}
+@keyframes dmgFloat{0%{transform:translateY(0) scale(1.2);opacity:1}55%{opacity:.85}100%{transform:translateY(-70px) scale(.7);opacity:0}}
 @keyframes toastIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.88)}10%{opacity:1;transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(.95)}}
 @keyframes slotIn{0%{width:0;opacity:0}100%{width:68px;opacity:1}}
 @keyframes endPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 24px rgba(230,224,212,.6)}}
@@ -60,7 +60,10 @@ button{font-family:Georgia,serif;cursor:pointer}
 @keyframes deckFly{0%{opacity:.88}100%{opacity:0;transform:translate(var(--dfx,60px),var(--dfy,0px)) scale(.35)}}
 
 .card-fw{animation:floatCard 2.2s ease-in-out infinite;animation-delay:var(--fd,0s)}
-.card-fw.new-card{animation:flyIn .46s cubic-bezier(.2,1.3,.6,1),floatCard 2.2s .46s ease-in-out infinite;animation-delay:0s,var(--fd,0s)}
+.card-fw.new-card{animation:flyIn .72s cubic-bezier(.2,1.2,.6,1),floatCard 2.2s .72s ease-in-out infinite;animation-delay:0s,var(--fd,0s)}
+.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:50}
+.minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
+.minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 .hs{position:absolute;bottom:0;cursor:grab;user-select:none;-webkit-user-select:none}
 .hs:active{cursor:grabbing}
 .hs.src-ghost>.card-fw{opacity:.12;filter:grayscale(90%);pointer-events:none!important}
@@ -234,23 +237,25 @@ const EPOCH=Date.now();
 // ── ANIMATION HELPERS ─────────────────
 function floatDelay(i){return(((Date.now()-EPOCH)+i*420)%2200)/1000;}
 function floatDmg(x,y,dmg,heal=false){const el=document.createElement("div");el.className="float-dmg";el.textContent=(heal?"+":"-")+dmg;el.style.cssText=`left:${x-16}px;top:${y-12}px;color:${heal?"#78e878":"#ff6855"};font-size:${dmg>=5?22:17}px`;document.body.appendChild(el);setTimeout(()=>el.remove(),980);}
-function lungeAtk(atkEl,defEl,onImpact,onDone){if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78,dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;atkEl.style.setProperty("--lx",dx+"px");atkEl.style.setProperty("--ly",dy+"px");atkEl.classList.add("lunging");setTimeout(()=>{atkEl.classList.remove("lunging");onImpact();setTimeout(onDone,290);},385);}
+function lungeAtk(atkEl,defEl,onImpact,onDone){if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78,dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;atkEl.style.setProperty("--lx",dx+"px");atkEl.style.setProperty("--ly",dy+"px");atkEl.classList.add("lunging");setTimeout(()=>{atkEl.classList.remove("lunging");onImpact();setTimeout(onDone,440);},620);}
 
 // ── SVG BADGE HELPERS ─────────────────
-// Smooth teardrop: pointed top, circle bottom. Text centered at circle center.
-const svgDrop=(v,fill,tf,w,h,fs)=>{const cy=h*.58,r=w/2-1;return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;right:2px;overflow:visible"><path d="M${w/2},1 Q${w-1},${h*.28} ${w-1},${cy} A${r},${r} 0 0,1 1,${cy} Q1,${h*.28} ${w/2},1 Z" fill="${fill}"/><text x="${w/2}" y="${cy}" dominant-baseline="central" text-anchor="middle" fill="${tf}" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;};
-const svgTri=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;left:2px;overflow:visible"><polygon points="${w/2},1 ${w-1},${h-1} 1,${h-1}" fill="${fill}"/><text x="${w/2}" y="${h*.82}" dominant-baseline="auto" text-anchor="middle" fill="#fff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
-const svgHex=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;top:2px;left:2px;overflow:visible"><polygon points="${w/2},0 ${w},${h*.27} ${w},${h*.73} ${w/2},${h} 0,${h*.73} 0,${h*.27}" fill="${fill}"/><text x="${w/2}" y="${h*.67}" dominant-baseline="central" text-anchor="middle" fill="#e8f4ff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
+const svgDrop=(v,fill,tf,w,h,fs)=>{const cy=h*.56,r=w/2-1;return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;right:2px;overflow:visible"><path d="M${w/2},1 Q${w-1},${h*.28} ${w-1},${cy} A${r},${r} 0 0,1 1,${cy} Q1,${h*.28} ${w/2},1 Z" fill="${fill}"/><text x="${w/2}" y="${cy}" dominant-baseline="central" text-anchor="middle" fill="${tf}" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;};
+const svgTri=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;left:2px;overflow:visible"><polygon points="${w/2},1 ${w-1},${h-1} 1,${h-1}" fill="${fill}"/><text x="${w/2}" y="${h*.78}" dominant-baseline="central" text-anchor="middle" fill="#fff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
+// hex: true center is h/2. Use dominant-baseline=central so text centers exactly.
+const svgHex=(v,fill,w,h,fs)=>`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;top:2px;left:2px;overflow:visible"><polygon points="${w/2},0 ${w},${h*.27} ${w},${h*.73} ${w/2},${h} 0,${h*.73} 0,${h*.27}" fill="${fill}"/><text x="${w/2}" y="${h*.5}" dominant-baseline="central" text-anchor="middle" fill="#e8f4ff" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;
 
 // ── HTML HELPERS ──────────────────────
 const hCard=(c,sel,faded,sm,glow)=>{
   const[hw,hh,hfs]=sm?[14,16,7]:[20,22,10];
   const[tw,th,tfs]=sm?[14,14,7]:[19,19,9];
   const[dw,dh,dfs]=sm?[12,15,7]:[17,21,9];
+  const isM=c.type==="minion";
+  const typeTag=`<div style="position:absolute;top:${sm?2:3}px;right:${sm?2:3}px;background:${isM?"rgba(38,25,8,.75)":"rgba(8,18,38,.75)"};border:1px solid ${isM?"rgba(160,105,25,.5)":"rgba(35,90,185,.5)"};border-radius:2px;padding:0 ${sm?2:3}px;font-size:${sm?5:6}px;color:${isM?"#b08428":"#5888cc"};letter-spacing:.3px;font-family:monospace;line-height:1.6;pointer-events:none">${isM?"隨從":"法術"}</div>`;
   return`<div class="card${sm?" sm":""}${sel?" sel":""}${faded?" faded":""}${glow?" playable":""}">
-  ${svgHex(c.cost,"#3c96cc",hw,hh,hfs)}
+  ${svgHex(c.cost,"#3c96cc",hw,hh,hfs)}${typeTag}
   <div class="csym">${c.sym}</div><div class="cname">${c.name}</div>
-  ${c.type==="minion"?svgTri(c.atk,"#d86018",tw,th,tfs)+svgDrop(c.hp,"#c22828","#ffe8e8",dw,dh,dfs):`<div class="cdesc">${c.desc||""}</div>`}
+  ${isM?svgTri(c.atk,"#d86018",tw,th,tfs)+svgDrop(c.hp,"#c22828","#ffe8e8",dw,dh,dfs):`<div class="cdesc">${c.desc||""}</div>`}
 </div>`;};
 const hBack=()=>`<div class="cardback"><div style="width:56px;height:82px;border:1px solid #1e1e1e;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#1e1e1e;font-size:22px">◈</div></div>`;
 const hMinion=(m,sel,glow,ns)=>{const can=!m.sick&&!m.attacked,lo=m.curHp/m.hp<0.35;
@@ -370,34 +375,71 @@ function showDeck(){deckEdit=[...DECK];buildDeck();}
 function buildDeck(){
   const cnt=id=>deckEdit.filter(x=>x===id).length,tot=deckEdit.length;
   const grp=[...deckEdit].sort((a,b)=>getDef(a).cost-getDef(b).cost).reduce((acc,id)=>{const l=acc[acc.length-1];if(l&&l.id===id)l.n++;else acc.push({id,n:1,c:getDef(id)});return acc;},[]);
-  const lockSvg=`<svg width="24" height="26" viewBox="0 0 24 26"><path d="M6,11 V8 A6,6 0 0,1 18,8 V11" fill="none" stroke="#c8a832" stroke-width="2.8" stroke-linecap="round"/><rect x="2" y="11" width="20" height="13" rx="3.5" fill="#c8a832"/><circle cx="12" cy="17" r="3" fill="#0a0808"/><rect x="10.5" y="17" width="3" height="4" rx="1.5" fill="#0a0808"/></svg>`;
+
+  // Fix 1: lock overlay uses exact card.sm dimensions (68×94), not inset:0 on .pc
+  const lockSvg=`<svg width="28" height="30" viewBox="0 0 28 30"><path d="M7,13 V9 A7,7 0 0,1 21,9 V13" fill="none" stroke="#c8a832" stroke-width="3" stroke-linecap="round"/><rect x="2" y="13" width="24" height="15" rx="4" fill="#c8a832"/><circle cx="14" cy="20" r="3.5" fill="#0a0808"/><rect x="12.2" y="20" width="3.6" height="5" rx="1.8" fill="#0a0808"/></svg>`;
   let pi="";CARDS.forEach(c=>{
     const n=cnt(c.id),maxed=n>=2;
+    // Fix 1: overlay sized to match .card.sm exactly (68×94), positioned absolute over card
     const badge=maxed
-      ?`<div style="position:absolute;inset:0;background:rgba(0,0,0,.72);border-radius:6px;border:1.5px solid #8B6a18;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none">${lockSvg}<span style="color:#c8a832;font-size:7px;letter-spacing:.5px;font-family:monospace;font-weight:bold">×2 已達上限</span></div>`
-      :n===1?`<div style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.72);border-radius:3px;padding:1px 4px;font-size:7px;color:#888;font-family:monospace;pointer-events:none">×1</div>`:""
-    pi+=`<div class="pc${maxed?" maxed":""}" data-id="${c.id}" title="${c.name}">${hCard(c,false,false,true,false)}${badge}</div>`;
+      ?`<div style="position:absolute;top:0;left:0;width:68px;height:94px;background:rgba(0,0,0,.74);border-radius:6px;border:2px solid #8B6a18;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;pointer-events:none">${lockSvg}<span style="color:#c8a832;font-size:7.5px;letter-spacing:.5px;font-family:monospace;font-weight:bold">×2 已達上限</span></div>`
+      :n===1?`<div style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.7);border-radius:3px;padding:1px 4px;font-size:7px;color:#888;font-family:monospace;pointer-events:none">×1</div>`:""
+    pi+=`<div class="pc${maxed?" maxed":""}" data-id="${c.id}" title="${c.name}" style="position:relative;display:inline-block">${hCard(c,false,false,true,false)}${badge}</div>`;
   });
-  let li=grp.map(({id,n,c})=>`<div class="di" data-id="${id}">
-    <span style="color:#3a3a3a;font-family:monospace;font-size:10px;width:14px">${c.cost}</span>
+
+  // Fix 4: mana cost distribution chart (costs 1-8+)
+  const costBuckets=Array(9).fill(0);
+  deckEdit.forEach(id=>{const c=getDef(id);if(c)costBuckets[Math.min(8,c.cost)]++;});
+  const maxB=Math.max(1,...costBuckets);
+  const barColors=["#3a7acc","#3a7acc","#3a7acc","#3a7acc","#5a3a8a","#5a3a8a","#8a2a2a","#8a2a2a","#4a1a1a"];
+  let chartBars="";
+  for(let i=1;i<=8;i++){
+    const h=Math.round((costBuckets[i]/maxB)*36);
+    const lbl=i===8?"8+":String(i);
+    chartBars+=`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
+      <div style="font-size:7px;color:#444;font-family:monospace">${costBuckets[i]||""}</div>
+      <div style="width:100%;background:#0e0e0e;border-radius:1px;height:36px;display:flex;align-items:flex-end">
+        <div style="width:100%;height:${h}px;background:${barColors[i]};border-radius:1px 1px 0 0;transition:height .2s;min-height:${costBuckets[i]>0?2:0}px"></div>
+      </div>
+      <div style="font-size:7px;color:#3a3a3a;font-family:monospace">${lbl}</div>
+    </div>`;
+  }
+  const avgCost=tot>0?(deckEdit.reduce((s,id)=>s+(getDef(id)?.cost||0),0)/tot).toFixed(1):"—";
+  const chart=`<div style="margin-top:10px;padding:8px 4px 4px;background:#0a0a0a;border:1px solid #151515;border-radius:3px">
+    <div style="display:flex;gap:1px;align-items:flex-end">${chartBars}</div>
+    <div style="text-align:center;margin-top:5px;font-size:8px;color:#383838;font-family:monospace;letter-spacing:1px">平均費用 <span style="color:#555">${avgCost}</span></div>
+  </div>`;
+
+  // Fix 5: deck list with separators between items
+  let li=grp.map(({id,n,c})=>`<div class="di" data-id="${id}" style="border-bottom:1px solid #161616">
+    <span style="color:#3a3a3a;font-family:monospace;font-size:10px;width:14px;flex-shrink:0">${c.cost}</span>
     <span style="color:#d0ccc0;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
     <span style="color:#3a3a3a;font-family:monospace;font-size:10px">×${n}</span>
   </div>`).join("");
   if(!grp.length)li=`<div style="color:#222;font-size:11px;text-align:center;margin-top:50px">牌組為空</div>`;
-  if(tot>0&&tot<30)li+=`<div style="margin-top:12px;font-size:10px;color:#444;text-align:center;letter-spacing:1px">還需 ${30-tot} 張</div>`;
+  if(tot>0&&tot<30)li+=`<div style="margin-top:10px;font-size:10px;color:#444;text-align:center;letter-spacing:1px">還需 ${30-tot} 張</div>`;
+
   R().innerHTML=`<div class="dscreen"><div class="dhead">
     <button id="dbk" style="background:none;border:1px solid #222;color:#777;padding:6px 14px;font-size:11px">← 返回</button>
     <span style="font-size:16px;letter-spacing:4px;color:#ccc">我的卡牌</span>
-    <div style="margin-left:auto;display:flex;gap:12px;align-items:center">
+    <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
       <span style="font-size:12px;font-family:monospace;color:${tot===30?"#7d7":"#666"}">${tot}/30</span>
-      <button id="dsv" style="padding:7px 18px;background:${tot===30?"#ede9dc":"#111"};color:${tot===30?"#000":"#444"};border:none;font-size:11px;letter-spacing:2px">儲存牌組</button>
+      <button id="dsv" style="padding:7px 16px;background:${tot===30?"#ede9dc":"#111"};color:${tot===30?"#000":"#444"};border:none;font-size:11px;letter-spacing:2px">儲存牌組</button>
     </div>
   </div><div class="dbody">
     <div class="pool"><div style="font-size:9px;color:#3a3a3a;letter-spacing:3px;margin-bottom:12px">點擊加入 · 長按查看</div><div class="pgrid">${pi}</div></div>
-    <div class="dlist" id="dlist"><div style="font-size:9px;color:#3a3a3a;letter-spacing:2px;margin-bottom:12px">當前牌組 <span style="color:#2a2a2a;font-size:8px">↩ 拖出移除</span></div>${li}</div>
+    <div class="dlist" id="dlist">
+      <div style="display:flex;align-items:center;margin-bottom:8px;gap:6px">
+        <div style="font-size:9px;color:#3a3a3a;letter-spacing:2px;flex:1">當前牌組 <span style="color:#2a2a2a;font-size:8px">↩ 拖出移除</span></div>
+        <button id="dclr" style="padding:3px 8px;background:none;border:1px solid #2a1a1a;color:#5a2a2a;font-size:9px;letter-spacing:1px;border-radius:2px">清空</button>
+      </div>
+      ${li}${chart}
+    </div>
   </div></div>`;
   document.getElementById("dbk").onclick=()=>{SCR="menu";render();};
   document.getElementById("dsv").onclick=()=>{if(tot===30){DECK=[...deckEdit];SCR="menu";render();}};
+  // Fix 2: clear all button
+  document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;deckEdit=[];buildDeck();};
   // Pool card interactions
   document.querySelectorAll(".pc[data-id]").forEach(card=>{
     const id=card.dataset.id;let lpT=null,lpW=false;
