@@ -110,8 +110,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 .gl{border-bottom:1px solid #0a0a0a;padding-bottom:2px;color:#3a3a3a}
 .gl.lx{color:#686868}
 
-/* ── TOAST: anchored near battlefield center-line, left side ── */
-#sc-toast{position:fixed;left:16px;top:50%;transform:translateY(-50%);background:rgba(4,4,4,.96);border:1px solid rgba(255,255,255,.08);padding:7px 18px;border-radius:2px;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastIn 2.1s ease-out forwards}
+/* ── TOAST: battlefield center, safe margins ── */
+#sc-toast{position:fixed;left:50%;top:52%;transform:translate(-50%,-50%);background:rgba(4,4,4,.96);border:1px solid rgba(255,255,255,.08);padding:7px 18px;border-radius:2px;font-size:13px;z-index:1000;pointer-events:none;letter-spacing:1px;white-space:nowrap;animation:toastIn 2.1s ease-out forwards;max-width:calc(100vw - 32px);box-sizing:border-box}
 #sc-toast.ok{color:#78e878;border-color:rgba(80,200,80,.3)}
 #sc-toast.warn{color:#e8e4d8}
 #sc-toast.err{color:#ff7060;border-color:rgba(255,70,60,.3)}
@@ -168,9 +168,9 @@ const CARDS=[
   {id:"s01",name:"暗影箭",  cost:1,type:"spell",effect:"dmg",  val:2,sym:"✦",desc:"造成2點傷害"},
   {id:"s02",name:"黑暗儀式",cost:2,type:"spell",effect:"draw", val:2,sym:"✧",desc:"抽2張牌"},
   {id:"s03",name:"黑暗護盾",cost:2,type:"spell",effect:"heal", val:8,sym:"✩",desc:"恢復8點生命"},
-  {id:"s04",name:"虛空爆破",cost:3,type:"spell",effect:"dmg",  val:4,sym:"✪",desc:"造成4點傷害"},
+  {id:"s04",name:"虛空爆破",cost:3,type:"spell",effect:"dmg",  val:4,sym:"✪",desc:"4點傷害 可全場"},
   {id:"s05",name:"吸魂術",  cost:4,type:"spell",effect:"drain",val:5,sym:"✫",desc:"吸取5點生命"},
-  {id:"s06",name:"混沌衝擊",cost:5,type:"spell",effect:"dmg",  val:7,sym:"✬",desc:"造成7點傷害"},
+  {id:"s06",name:"混沌衝擊",cost:5,type:"spell",effect:"dmg",  val:7,sym:"✬",desc:"7點傷害 可全場"},
 ];
 const getDef=id=>CARDS.find(c=>c.id===id);
 const DEF_DECK=["m01","m01","s01","s01","m02","m02","m03","m03","s02","s03","m04","m04","s04","m05","m05","m07","m07","m08","s05","m06","m06","m09","m09","m10","m11","m12","s06","m13","m14","m14"];
@@ -184,7 +184,40 @@ const chk=s=>{if(s.player.hp<=0&&s.ai.hp<=0)return{...s,over:"draw"};if(s.player
 const draw1=(s,who)=>{const p=s[who];if(!p.deck.length){return chk(alog({...s,[who]:{...p,hp:p.hp-5}},"💀"+(who==="player"?"你":"AI")+"牌庫空-5HP"));}const[d,...rest]=p.deck;if(p.hand.length>=10)return alog({...s,[who]:{...p,deck:rest}},d.name+"燒毀");return who==="player"?alog({...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},lastDraw:d.uid},"🃏抽："+d.name):{...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},aiNewCard:true};};
 const startT=(s0,who)=>{const p=s0[who],nm=Math.min(10,p.maxMana+1);let s={...s0,[who]:{...p,maxMana:nm,mana:nm,board:p.board.map(m=>({...m,sick:false,attacked:false}))},turn:who,mode:"default",selCard:null,selAtk:null,lastDraw:null,aiNewCard:false};s=draw1(s,who);if(!s.over)s=alog(s,"━━"+(who==="player"?"你的回合":"電腦回合")+"━━");return s;};
 const playM=(s0,hi,who)=>{const p=s0[who],c=p.hand[hi];if(!c||c.type!=="minion"||p.mana<c.cost||p.board.length>=7)return s0;const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};return alog({...s0,[who]:{...p,mana:p.mana-c.cost,hand:p.hand.filter((_,i)=>i!==hi),board:[...p.board,mn]}},"⚔️"+(who==="player"?"你":"AI")+"召："+c.name);};
-const castS=(s0,hi,who,tw,ti)=>{const p=s0[who],c=p.hand[hi];if(!c||c.type!=="spell"||p.mana<c.cost)return s0;let s={...s0,[who]:{...p,mana:p.mana-c.cost,hand:p.hand.filter((_,i)=>i!==hi)}};const{effect:ef,val:v}=c;if(ef==="dmg"){if(ti===-1){s={...s,[tw]:{...s[tw],hp:s[tw].hp-v}};s=alog(s,"✨"+c.name+"→英雄-"+v);}else{const h=s[tw].board[ti];s={...s,[tw]:{...s[tw],board:s[tw].board.map((m,i)=>i===ti?{...m,curHp:m.curHp-v}:m).filter(m=>m.curHp>0)}};s=alog(s,"✨"+c.name+"→"+h.name+"-"+v);}}else if(ef==="heal"){s={...s,[who]:{...s[who],hp:Math.min(50,s[who].hp+v)}};s=alog(s,"💚"+c.name+"+"+v);}else if(ef==="draw"){s=alog(s,"📚"+c.name+"抽"+v);for(let i=0;i<v;i++){s=draw1(s,who);if(s.over)break;}}else if(ef==="drain"){let d=v;if(ti===-1){s={...s,[tw]:{...s[tw],hp:s[tw].hp-v}};}else{d=Math.min(v,s[tw].board[ti].curHp);s={...s,[tw]:{...s[tw],board:s[tw].board.map((m,i)=>i===ti?{...m,curHp:m.curHp-v}:m).filter(m=>m.curHp>0)}};}s={...s,[who]:{...s[who],hp:Math.min(50,s[who].hp+d)}};s=alog(s,"🔮吸"+d);}return chk(s);};
+const castS=(s0,hi,who,tw,ti)=>{
+  const p=s0[who],c=p.hand[hi];
+  if(!c||c.type!=="spell"||p.mana<c.cost)return s0;
+  let s={...s0,[who]:{...p,mana:p.mana-c.cost,hand:p.hand.filter((_,i)=>i!==hi)}};
+  const{effect:ef,val:v}=c;
+  if(ef==="dmg"){
+    if(ti===-2){
+      // all targets — hit all enemy minions + enemy hero
+      let bd=[...s[tw].board];
+      bd=bd.map(m=>({...m,curHp:m.curHp-v})).filter(m=>m.curHp>0);
+      s={...s,[tw]:{...s[tw],board:bd,hp:s[tw].hp-v}};
+      s=alog(s,"✨"+c.name+"→全場-"+v);
+    }else if(ti===-1){
+      s={...s,[tw]:{...s[tw],hp:s[tw].hp-v}};s=alog(s,"✨"+c.name+"→英雄-"+v);
+    }else{
+      const h=s[tw].board[ti];
+      s={...s,[tw]:{...s[tw],board:s[tw].board.map((m,i)=>i===ti?{...m,curHp:m.curHp-v}:m).filter(m=>m.curHp>0)}};
+      s=alog(s,"✨"+c.name+"→"+h.name+"-"+v);
+    }
+  }else if(ef==="heal"){
+    // Fix 2+3: heal self only (caster's hero recovers hp)
+    s={...s,[who]:{...s[who],hp:Math.min(50,s[who].hp+v)}};
+    s=alog(s,"💚"+c.name+"+"+v);
+  }else if(ef==="draw"){
+    s=alog(s,"📚"+c.name+"抽"+v);
+    for(let i=0;i<v;i++){s=draw1(s,who);if(s.over)break;}
+  }else if(ef==="drain"){
+    let d=v;
+    if(ti===-1){s={...s,[tw]:{...s[tw],hp:s[tw].hp-v}};}
+    else{d=Math.min(v,s[tw].board[ti].curHp);s={...s,[tw]:{...s[tw],board:s[tw].board.map((m,i)=>i===ti?{...m,curHp:m.curHp-v}:m).filter(m=>m.curHp>0)}};}
+    s={...s,[who]:{...s[who],hp:Math.min(50,s[who].hp+d)}};s=alog(s,"🔮吸"+d);
+  }
+  return chk(s);
+};
 const atkF=(s0,who,ai,tw,ti)=>{const a=s0[who].board[ai];if(!a||a.sick||a.attacked)return s0;if(ti===-1){let s={...s0,[who]:{...s0[who],board:s0[who].board.map((m,i)=>i===ai?{...m,attacked:true}:m)},[tw]:{...s0[tw],hp:s0[tw].hp-a.atk}};return chk(alog(s,"⚔️"+a.name+"→英雄-"+a.atk));}const d=s0[tw].board[ti];let s={...s0,[who]:{...s0[who],board:s0[who].board.map((m,i)=>i===ai?{...m,attacked:true,curHp:a.curHp-d.atk}:m).filter(m=>m.curHp>0)},[tw]:{...s0[tw],board:s0[tw].board.map((m,i)=>i===ti?{...m,curHp:d.curHp-a.atk}:m).filter(m=>m.curHp>0)}};return chk(alog(s,"⚔️"+a.name+"("+a.atk+")vs"+d.name+"("+d.atk+")"));};
 const newGame=pdeck=>{const pd=shuf(pdeck).map(id=>mk(getDef(id))),ad=shuf(DEF_DECK).map(id=>mk(getDef(id)));const ph=pd.splice(0,2),ah=ad.splice(0,2);let s={player:{hp:50,mana:0,maxMana:0,deck:pd,hand:ph,board:[]},ai:{hp:50,mana:0,maxMana:0,deck:ad,hand:ah,board:[]},turn:"player",mode:"default",selCard:null,selAtk:null,log:["遊戲開始！你先手。"],over:null,lastDraw:null,aiNewCard:false};return startT(s,"player");};
 
@@ -238,9 +271,37 @@ function executeAiScript(script,idx,onDone){
     }
     GAME=step.sa;
     if(step.newSumUid){newSummonUid=step.newSumUid;setTimeout(()=>{newSummonUid=null;},650);}
+    // Fix 6: for AI spell — show card reveal, then apply effects
+    if(step.card.type==="spell"){
+      // Briefly show a card floating from AI hand area
+      const aiHW=document.querySelector(".ai-hand-wrap");
+      if(aiHW){
+        const hr=aiHW.getBoundingClientRect();
+        const reveal=document.createElement("div");
+        reveal.style.cssText=`position:fixed;left:${hr.left+hr.width/2-34}px;top:${hr.top+4}px;pointer-events:none;z-index:800;animation:none;transition:transform .4s,opacity .3s .5s`;
+        reveal.innerHTML=hCard(step.card,false,false,true,false);
+        document.body.appendChild(reveal);
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{reveal.style.transform="translateY(24px) scale(1.08)";}));
+        setTimeout(()=>{reveal.style.opacity="0";},500);
+        setTimeout(()=>reveal.remove(),820);
+      }
+      // Fix 5: draw card fly-in for AI draw spell
+      if(step.card.effect==="draw"){animDrawCards(step.card.val,"ai",400);}
+      // Damage float
+      if(step.spellTarget){const{ti,val}=step.spellTarget;setTimeout(()=>{
+        if(ti===-2){
+          // all targets: flash each om + hero
+          document.querySelectorAll(".om .minion,#ph").forEach(el=>{if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,val);}});
+        }else{
+          const el=ti===-1?document.getElementById("ph"):(document.querySelector(`.om[data-oi="${ti}"] .minion`)||document.querySelector(`.om[data-oi="${ti}"]`));
+          if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,val);}
+        }
+      },420);}
+      setTimeout(next,980);
+      return;
+    }
     render();
-    if(step.spellTarget){const{ti,val}=step.spellTarget;setTimeout(()=>{const el=ti===-1?document.getElementById("ph"):(document.querySelector(`.om[data-oi="${ti}"] .minion`)||document.querySelector(`.om[data-oi="${ti}"]`));if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,val);}},220);}
-    setTimeout(next,820); // Fix 9: longer pause between plays
+    setTimeout(next,820);
   }else if(step.type==="atk"){
     // Fix 6: show PRE-attack state so both cards are visible during animation
     GAME=step.sb;render();
@@ -277,6 +338,27 @@ const EPOCH=Date.now();
 // ── ANIMATION HELPERS ─────────────────
 function floatDelay(i){return(((Date.now()-EPOCH)+i*420)%2200)/1000;}
 function floatDmg(x,y,dmg,heal=false){const el=document.createElement("div");el.className="float-dmg";el.textContent=(heal?"+":"-")+dmg;el.style.cssText=`left:${x-16}px;top:${y-12}px;color:${heal?"#78e878":"#ff6855"};font-size:${dmg>=5?22:17}px`;document.body.appendChild(el);setTimeout(()=>el.remove(),980);}
+
+// Fix 5: animate cards flying into hand from right side when draw spell fires
+function animDrawCards(count,who,delay=0){
+  const hw=who==="player"?document.querySelector(".hand-wrap"):document.querySelector(".ai-hand-wrap");
+  if(!hw)return;
+  const hr=hw.getBoundingClientRect();
+  for(let i=0;i<count;i++){
+    setTimeout(()=>{
+      const ghost=document.createElement("div");
+      ghost.style.cssText=`position:fixed;left:${window.innerWidth+20}px;top:${hr.top+hr.height/2-47}px;pointer-events:none;z-index:850;transition:left .55s cubic-bezier(.2,1.2,.6,1),top .55s,opacity .2s .5s`;
+      ghost.innerHTML=who==="player"?`<div class="card sm" style="background:#f4f0e8"></div>`:hBack();
+      document.body.appendChild(ghost);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        ghost.style.left=(hr.left+hr.width/2-34)+"px";
+        ghost.style.top=(hr.top+8)+"px";
+        ghost.style.opacity="0";
+      }));
+      setTimeout(()=>ghost.remove(),780);
+    },delay+i*280);
+  }
+}
 function lungeAtk(atkEl,defEl,onImpact,onDone){if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78,dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;atkEl.style.setProperty("--lx",dx+"px");atkEl.style.setProperty("--ly",dy+"px");atkEl.classList.add("lunging");setTimeout(()=>{atkEl.classList.remove("lunging");onImpact();setTimeout(onDone,440);},620);}
 
 // ── SVG BADGE HELPERS (3D bevel) ─────
@@ -294,25 +376,26 @@ const svgTri=(v,fill,w,h,fs)=>{
 const svgDrop=(v,fill,tf,w,h,fs)=>{const cy=h*.56,r=w/2-1;
   return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="position:absolute;bottom:2px;right:2px;overflow:visible"><path d="M${w/2},1 Q${w-1},${h*.28} ${w-1},${cy} A${r},${r} 0 0,1 1,${cy} Q1,${h*.28} ${w/2},1 Z" fill="${fill}"/><path d="M${w/2},1 Q${w-1},${h*.28} ${w*.72},${cy*.52}" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.1" stroke-linecap="round"/><text x="${w/2}" y="${cy}" dominant-baseline="central" text-anchor="middle" fill="${tf}" font-size="${fs}" font-family="monospace" font-weight="bold">${v}</text></svg>`;};
 
-// Fix 3+4: hexagonal 3D gem mana — flat-top regular hexagon
+// Fix 4: hexagonal gem mana — POINTED-TOP hex matching svgHex badge shape
 function hMana(cur,max){
-  // Flat-top hexagon: top/bottom edges horizontal, matches card badge svgHex
-  // In 14×12 viewBox: points at top-left,top-right,right,bot-right,bot-left,left
-  const hexPts="3.5,0 10.5,0 14,6 10.5,12 3.5,12 0,6";
-  const hiPts="3.5,0 10.5,0 10.5,4.5 3.5,4.5";   // top face highlight
-  const shPts="3.5,7.5 10.5,7.5 10.5,12 3.5,12";  // bottom face shadow
+  // Pointed-top hex in viewBox "0 0 14 16": same proportions as svgHex
+  // Points: top, right-top, right-bot, bottom, left-bot, left-top
+  const hexPts="7,0 14,4 14,12 7,16 0,12 0,4";
+  const hiPts="7,0 14,4 10,7 4,7";      // upper-left highlight face
+  const shPts="4,9 10,9 14,12 7,16 0,12"; // lower shadow face
+  const vb="0 0 14 16";
   let g="";
   for(let i=0;i<10;i++){
     const on=i<cur,ex=i<max;
     if(!ex){
-      g+=`<svg width="14" height="12" viewBox="0 0 14 12"><polygon points="${hexPts}" fill="none" stroke="#161616" stroke-width="1"/></svg>`;
+      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="none" stroke="#1e1e1e" stroke-width="1.2"/></svg>`;
     }else if(on){
-      g+=`<svg width="14" height="12" viewBox="0 0 14 12"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6aacff"/><stop offset="55%" stop-color="#1c72e8"/><stop offset="100%" stop-color="#0a3d8a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#2255bb" stroke-width=".7"/><polygon points="${hiPts}" fill="rgba(255,255,255,.22)"/><polygon points="${shPts}" fill="rgba(0,0,0,.18)"/></svg>`;
+      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#72b4ff"/><stop offset="55%" stop-color="#1c72e8"/><stop offset="100%" stop-color="#0a3d8a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#2055bb" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.2)"/></svg>`;
     }else{
-      g+=`<svg width="14" height="12" viewBox="0 0 14 12"><polygon points="${hexPts}" fill="#111820" stroke="#1e2a3a" stroke-width=".7"/></svg>`;
+      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="#131a24" stroke="#1e2a3a" stroke-width=".8"/></svg>`;
     }
   }
-  return`<div style="display:flex;gap:2px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#4488cc;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
+  return`<div style="display:flex;gap:3px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#5599dd;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
 }
 
 // ── HTML HELPERS ──────────────────────
@@ -594,7 +677,8 @@ function showBattle(){
     ?pl.board.map((m,i)=>`<div class="om" data-oi="${i}">${hMinion(m,selAtk===i,false,m.uid===newSummonUid)}</div>`).join("")
     :`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 我方戰場 —</div>`;
   const logH=log.map((l,i)=>`<div class="gl${i===0?" lx":""}">${l}</div>`).join("");
-  const modeH=mode==="targeting"?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選擇目標</span>`
+  const modeH=mode==="targeting"
+    ?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選擇目標</span>${(()=>{const c=pl.hand[selCard];return c&&c.effect==="dmg"?`<button id="ball" style="padding:5px 10px;background:rgba(200,50,50,.15);border:1px solid rgba(200,80,50,.5);color:#e08060;font-size:10px;border-radius:2px;margin-left:6px">全場</button>`:"";})()}`
     :mode==="attacking"?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選攻擊目標</span>`:"";
   const canEnd=isP&&!pl.hand.some(c=>c.cost<=pl.mana)&&!pl.board.some(m=>!m.sick&&!m.attacked);
   const goH=over?`<div class="go">
@@ -605,36 +689,32 @@ function showBattle(){
   </div>`:"";
   R().innerHTML=`<div style="height:100vh;background:#0c0c0c;display:flex;flex-direction:column;user-select:none;overflow:hidden;position:relative">
     <div class="topbar">
-      <div style="font-size:10px;color:#888;letter-spacing:1px">對手本回合魔力</div>
+      <div style="font-size:10px;color:#c0c0b0;letter-spacing:1px">對手本回合魔力</div>
       ${hMana(ai.mana,ai.maxMana)}
-      <span style="font-size:10px;color:#666;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
-      <span style="font-size:10px;color:#555;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
-      ${turn==="ai"&&!over?`<span style="margin-left:auto;font-size:11px;color:#667;letter-spacing:2px;font-style:italic">對手思考中...</span>`:""}
+      <span style="font-size:10px;color:#aaa;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
+      <span style="font-size:10px;color:#888;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
+      ${turn==="ai"&&!over?`<span style="margin-left:auto;font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">對手思考中...</span>`:""}
     </div>
     <div class="ai-hand-wrap">${hAIFan(ai.hand.length,aiNewCard)}</div>
     <div class="hero-row top">${hHeroPort(ai.hp,true,canTgt,"ah")}
-      <span style="font-size:9px;color:#4a4a2a;font-family:monospace">場上隨從 ${ai.board.length}/7</span>
+      <span style="font-size:10px;color:#888;font-family:monospace">場上隨從 ${ai.board.length}/7</span>
     </div>
     <div class="boards">
       <div class="brow" id="ab">${aiBd}</div>
       <div class="center-div"></div>
       <div class="brow" id="pb">${plBd}</div>
-      <div class="gamelog-wrap">
-        <button class="log-btn" id="log-btn">${logOpen?"▲ 隱藏":"▼ 記錄"}</button>
-        ${logOpen?`<div class="gamelog">${logH}</div>`:""}
-      </div>
     </div>
     <div class="hero-row bot" style="gap:20px">${hHeroPort(pl.hp,false,false,"ph")}
-      <span style="font-size:9px;color:#4a4a2a;font-family:monospace">場上隨從 ${pl.board.length}/7</span>
+      <span style="font-size:10px;color:#888;font-family:monospace">場上隨從 ${pl.board.length}/7</span>
       ${modeH}
     </div>
     <div class="hand-wrap" id="hw">${hFan(pl.hand,selCard,pl.mana,lastDraw)}</div>
     <div class="hand-hint-bar"><span class="hand-hint">長按放大查看 · 手牌上限 10 張 · 場上上限 7 張</span></div>
     <div class="botbar">
-      <div style="font-size:10px;color:#888;letter-spacing:1px">我方本回合魔力</div>
+      <div style="font-size:10px;color:#c0c0b0;letter-spacing:1px">我方本回合魔力</div>
       ${hMana(pl.mana,pl.maxMana)}
-      <span style="font-size:10px;color:#666;font-family:monospace;margin-left:6px">手牌 ${pl.hand.length}/10</span>
-      <span style="font-size:10px;color:#555;font-family:monospace;margin-left:4px">牌庫剩餘 ${pl.deck.length}</span>
+      <span style="font-size:10px;color:#aaa;font-family:monospace;margin-left:6px">手牌 ${pl.hand.length}/10</span>
+      <span style="font-size:10px;color:#888;font-family:monospace;margin-left:4px">牌庫剩餘 ${pl.deck.length}</span>
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
         ${canTgt&&isP?`<button id="bcn" style="padding:7px 12px;background:none;border:1px solid #333;color:#888;font-size:11px">取消</button>`:""}
         <button id="bet" style="padding:9px 20px;background:${isP?"#ede9dc":"#111"};color:${isP?"#000":"#444"};border:none;font-size:12px;letter-spacing:3px" class="${canEnd?"end-hint":""}">結束回合</button>
@@ -645,12 +725,20 @@ function showBattle(){
   </div>`;
   if(over){document.getElementById("gmn").onclick=()=>{GAME=null;SCR="menu";render();};return;}
   document.getElementById("bsv").onclick=()=>{GAME=null;SCR="menu";render();};
-  document.getElementById("log-btn").onclick=()=>{logOpen=!logOpen;showBattle();};
   if(isP){
     document.getElementById("bet").onclick=()=>act({t:"ET"});
     const bc=document.getElementById("bcn");if(bc)bc.onclick=()=>act({t:"CL"});
     document.querySelectorAll(".em").forEach(e=>e.onclick=ev=>{ev.stopPropagation();act({t:"EM",i:+e.dataset.ei});});
     document.getElementById("ah").onclick=()=>act({t:"EH"});
+    const ball=document.getElementById("ball");if(ball)ball.onclick=()=>act({t:"EA"});
+    // Fix 2: for heal/drain targeting, own hero and own minions are also valid targets
+    if(mode==="targeting"&&g.player.hand[selCard]){
+      const sc=g.player.hand[selCard];
+      if(sc.effect==="heal"||sc.effect==="drain"){
+        const ph=document.getElementById("ph");if(ph){ph.style.cursor="pointer";ph.onclick=()=>act({t:"PH"});}
+        document.querySelectorAll(".om").forEach(e=>e.onclick=ev=>{ev.stopPropagation();act({t:"PM",i:+e.dataset.oi});});
+      }
+    }
   }
   addDragListeners();
   if(turn==="ai"&&!over&&!aiRunning){
@@ -696,9 +784,9 @@ function onDown(e){
 function onMove(e){
   if(!drag.active)return;e.preventDefault();const p=pt(e),ddx=p.x-drag.startX,ddy=p.y-drag.startY;
   const dist=Math.sqrt(ddx*ddx+ddy*ddy);
-  // Fix 7: spell cards need 22px to start drag, minions/board use 10px
+  // Fix 1: minion needs 50px drag distance, spells need 22px, board attacks need 10px
   const dragCard=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
-  const threshold=dragCard&&dragCard.type!=="minion"?22:10;
+  const threshold=drag.type==="board"?10:dragCard&&dragCard.type!=="minion"?22:50;
   if(!drag.dragging&&dist>threshold){
     clearLP();const g=GAME;if(!g)return;
     if(drag.type==="hand"){
@@ -846,20 +934,59 @@ function doPlayerAtk(bi,tw,ti){
 // ── DISPATCH ──────────────────────────
 function act(a){
   if(!GAME||GAME.over||GAME.turn!=="player"||animLock)return;const g=GAME;
-  if(a.t==="HC"){
+  if(a.t==="EA"){
+    // Fix 8: all-target damage
+    if(g.mode==="targeting"&&g.selCard!=null){
+      const card=g.player.hand[g.selCard];
+      if(card&&card.effect==="dmg"){
+        setTimeout(()=>{document.querySelectorAll(".em .minion,#ah").forEach(el=>{if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val);}});},60);
+      }
+      GAME={...castS(g,g.selCard,"player","ai",-2),selCard:null,selAtk:null,mode:"default"};
+    }
+  }else if(a.t==="HC"){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}
     if(c.type==="minion"){if(g.player.board.length>=7){toast("戰場已滿！","err");return;}const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};const nb=[...g.player.board,mn];GAME={...alog({...g,player:{...g.player,mana:g.player.mana-c.cost,hand:g.player.hand.filter((_,i)=>i!==a.i),board:nb}},`⚔️你召：${c.name}`),selCard:null,selAtk:null,mode:"default"};newSummonUid=mn.uid;setTimeout(()=>{newSummonUid=null;},500);}
-    else if(c.effect==="heal"||c.effect==="draw"){GAME={...castS(g,a.i,"player","player",-1),selCard:null,selAtk:null,mode:"default"};}
-    else{GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};}
+    else if(c.effect==="draw"){
+      // animate cards flying into hand
+      animDrawCards(c.val,"player",200);
+      GAME={...castS(g,a.i,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
+    }else if(c.effect==="heal"||c.effect==="drain"){
+      // Fix 2: heal/drain needs a target — enter targeting mode like dmg spells
+      GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};
+    }else{GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};}
   }else if(a.t==="OM"){
     if(g.mode==="targeting"){GAME={...g,selCard:null,mode:"default"};}
     else{const m=g.player.board[a.i];if(!m)return;if(m.sick){toast("召喚後本回合不能攻擊","warn");return;}if(m.attacked){toast("此隨從本回合已行動","warn");return;}GAME=g.selAtk===a.i?{...g,selAtk:null,mode:"default"}:{...g,selAtk:a.i,mode:"attacking",selCard:null};}
   }else if(a.t==="EM"){
-    if(g.mode==="targeting"&&g.selCard!=null){const card=g.player.hand[g.selCard];const ns={...castS(g,g.selCard,"player","ai",a.i),selCard:null,selAtk:null,mode:"default"};if(card&&(card.effect==="dmg"||card.effect==="drain")){const t=document.querySelector(`.em[data-ei="${a.i}"] .minion`)||document.querySelector(`.em[data-ei="${a.i}"]`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val);}}GAME=ns;}
-    else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",a.i);return;}
+    if(g.mode==="targeting"&&g.selCard!=null){
+      const card=g.player.hand[g.selCard];
+      const ns={...castS(g,g.selCard,"player","ai",a.i),selCard:null,selAtk:null,mode:"default"};
+      if(card){const t=document.querySelector(`.em[data-ei="${a.i}"] .minion`)||document.querySelector(`.em[data-ei="${a.i}"]`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}}
+      GAME=ns;
+    }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",a.i);return;}
   }else if(a.t==="EH"){
-    if(g.mode==="targeting"&&g.selCard!=null){const card=g.player.hand[g.selCard];const ns={...castS(g,g.selCard,"player","ai",-1),selCard:null,selAtk:null,mode:"default"};if(card&&(card.effect==="dmg"||card.effect==="drain")){const ah=document.getElementById("ah");if(ah){const r=ah.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val);}}GAME=ns;}
-    else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",-1);return;}
+    if(g.mode==="targeting"&&g.selCard!=null){
+      const card=g.player.hand[g.selCard];
+      const ns={...castS(g,g.selCard,"player","ai",-1),selCard:null,selAtk:null,mode:"default"};
+      if(card){const ah=document.getElementById("ah");if(ah){const r=ah.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}}
+      GAME=ns;
+    }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",-1);return;}
+  }else if(a.t==="PH"){
+    // Own hero as spell target (heal self)
+    if(g.mode==="targeting"&&g.selCard!=null){
+      const card=g.player.hand[g.selCard];
+      const ns={...castS(g,g.selCard,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
+      if(card){const ph=document.getElementById("ph");if(ph){const r=ph.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,true);}}
+      GAME=ns;
+    }
+  }else if(a.t==="PM"){
+    // Own minion as spell target (heal own minion)
+    if(g.mode==="targeting"&&g.selCard!=null){
+      const card=g.player.hand[g.selCard];
+      const ns={...castS(g,g.selCard,"player","player",a.i),selCard:null,selAtk:null,mode:"default"};
+      if(card){const t=document.querySelector(`.om[data-oi="${a.i}"] .minion`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,true);}}
+      GAME=ns;
+    }
   }else if(a.t==="HC_AT"){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}if(c.type!=="minion")return;if(g.player.board.length>=7){toast("戰場已滿！","err");return;}
     const slot=Math.min(Math.max(0,a.slot??g.player.board.length),g.player.board.length);const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};const board=[...g.player.board];board.splice(slot,0,mn);
