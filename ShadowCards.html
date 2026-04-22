@@ -41,8 +41,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 /* ── HERO PORTRAIT ── */
 .hport{position:relative;flex-shrink:0;transition:filter .15s;border-radius:50%}
 .hport.tgt{filter:drop-shadow(0 0 11px rgba(200,48,48,.8));cursor:pointer}
-.hport.drop-hi{filter:drop-shadow(0 0 9px rgba(80,140,255,.7))!important}
-.hport.drop-ready{filter:drop-shadow(0 0 18px rgba(255,148,42,.95))!important;animation:rdyPulse .48s ease-in-out infinite}
+.hport.drop-hi,.hp-bar-row.drop-hi{filter:drop-shadow(0 0 9px rgba(80,140,255,.7))!important}
+.hport.drop-ready,.hp-bar-row.drop-ready{filter:drop-shadow(0 0 18px rgba(255,148,42,.95))!important;animation:rdyPulse .48s ease-in-out infinite}
 
 /* ── ANIMATIONS ── */
 @keyframes pBlue{0%,100%{box-shadow:0 0 8px rgba(20,100,210,.22),0 2px 6px rgba(0,0,0,.4)}50%{box-shadow:0 0 18px rgba(20,100,210,.6),0 2px 6px rgba(0,0,0,.4)}}
@@ -89,11 +89,13 @@ button{font-family:Georgia,serif;cursor:pointer}
 .topbar,.botbar{flex-shrink:0;padding:5px 14px;display:flex;align-items:center;gap:10px;background:#0d0d0d}
 .topbar{border-bottom:1px solid #111}
 .botbar{border-top:1px solid #111}
-/* AI section mirrors player section */
+/* ── HERO HP BAR ── */
+.hp-bar-row{flex-shrink:0;height:40px;display:flex;align-items:center;gap:10px;padding:0 12px;position:relative}
+.hp-bar-row.top{background:#0a0a0a;border-bottom:1px solid #1a1a1a}
+.hp-bar-row.bot{background:#0a0a0a;border-top:1px solid #1a1a1a;border-bottom:3px solid #050505}
+.hp-bar-track{flex:1;height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;position:relative}
+.hp-bar-fill{height:100%;border-radius:5px;transition:width .4s ease}
 .ai-hand-wrap{flex-shrink:0;height:108px;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;background:#090909;border-bottom:1px solid #1a1a1a;overflow:visible}
-.hero-row{flex-shrink:0;height:82px;display:flex;align-items:center;justify-content:center;gap:14px;position:relative}
-.hero-row.top{background:#0a0a0a;border-bottom:1px solid #1a1a1a}
-.hero-row.bot{background:#0a0a0a;border-top:1px solid #1a1a1a;border-bottom:4px solid #050505}
 .boards{flex:1;display:flex;flex-direction:column;min-height:0;background:#0c0c0c;position:relative}
 .brow{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 8px;min-height:64px}
 .center-div{height:1px;background:#181818;flex-shrink:0}
@@ -150,13 +152,11 @@ button{font-family:Georgia,serif;cursor:pointer}
 @media (max-height: 760px) {
   .topbar,.botbar{padding:3px 10px;gap:6px}
   .ai-hand-wrap{height:72px;padding-top:2px}
-  .hero-row{height:62px}
   .hand-wrap{height:96px}
   .hand-hint-bar{display:none}
 }
 @media (max-height: 680px) {
   .ai-hand-wrap{height:58px}
-  .hero-row{height:54px}
   .hand-wrap{height:86px}
   .brow{padding:2px 6px;gap:4px}
 }
@@ -440,50 +440,16 @@ const hMinion=(m,sel,glow,ns)=>{const can=!m.sick&&!m.attacked,lo=m.curHp/m.hp<0
   <div style="position:absolute;top:22px;left:0;right:0;text-align:center;font-size:5px;color:#9a7820;letter-spacing:.3px;font-family:monospace;pointer-events:none">— 隨從 —</div>
   <div class="ms">${m.sym}</div>
   ${svgTri(m.atk,"#d86018",17,17,8)}${svgDrop(m.curHp,lo?"#881818":"#c22828","#ffe8e8",14,17,8)}</div>`;};
-function hHeroPort(hp,isAI,tgt,id){
-  const gid=id+"g";
-  const aiSvg=`<svg viewBox="0 0 60 60" width="70" height="70"><defs><radialGradient id="${gid}" cx="50%" cy="35%"><stop offset="0%" stop-color="#1e0808"/><stop offset="100%" stop-color="#040303"/></radialGradient></defs>
-    <circle cx="30" cy="30" r="29" fill="url(#${gid})" stroke="#3a1010" stroke-width="1.5"/>
-    <path d="M9,22 Q9,5 30,4 Q51,5 51,22 L49,32 Q47,26 42,25 L36,20 Q30,18 24,20 L18,25 Q13,26 11,32Z" fill="#0f0508"/>
-    <ellipse cx="30" cy="30" rx="11" ry="13" fill="#cdc5b5"/>
-    <ellipse cx="30" cy="26" rx="10" ry="10" fill="#d8d0be"/>
-    <path d="M20,31 Q20,43 30,44 Q40,43 40,31" fill="#bcb4a4"/>
-    <ellipse cx="25" cy="26" rx="5" ry="5.2" fill="#0d0508"/>
-    <ellipse cx="35" cy="26" rx="5" ry="5.2" fill="#0d0508"/>
-    <ellipse cx="25" cy="26" rx="3.5" ry="3.5" fill="#cc1818"/>
-    <ellipse cx="35" cy="26" rx="3.5" ry="3.5" fill="#cc1818"/>
-    <ellipse cx="25" cy="25.5" rx="2" ry="2" fill="#ff5555" opacity=".7"/>
-    <ellipse cx="35" cy="25.5" rx="2" ry="2" fill="#ff5555" opacity=".7"/>
-    <path d="M28.5,33 L30,36.5 L31.5,33" fill="none" stroke="#a09080" stroke-width="1.2"/>
-    <rect x="24" y="40" width="3" height="5" rx="1" fill="#d8d0be"/>
-    <rect x="28.5" y="40" width="3" height="5.5" rx="1" fill="#d8d0be"/>
-    <rect x="33" y="40" width="3" height="5" rx="1" fill="#d8d0be"/>
-    <path d="M22,40 Q30,42 38,40" fill="none" stroke="#a09080" stroke-width=".8"/>
-    <circle cx="30" cy="30" r="28" fill="none" stroke="#5a1010" stroke-width="1" opacity=".6"/>
-  </svg>`;
-  const plSvg=`<svg viewBox="0 0 60 60" width="70" height="70"><defs><radialGradient id="${gid}" cx="34%" cy="28%"><stop offset="0%" stop-color="#0e0e20"/><stop offset="100%" stop-color="#050507"/></radialGradient></defs>
-    <circle cx="30" cy="30" r="29" fill="url(#${gid})" stroke="#1a1a40" stroke-width="1.5"/>
-    <path d="M15,40 Q12,30 12,21 Q12,5 30,4 Q48,5 48,21 Q48,30 45,40 Q39,45 30,46 Q21,45 15,40Z" fill="#14142c"/>
-    <path d="M15,40 Q12,30 12,21 Q12,5 30,4 Q48,5 48,21 Q48,30 45,40" fill="none" stroke="#252548" stroke-width="1.8"/>
-    <rect x="16" y="26" width="28" height="7" rx="3.5" fill="#0a0a1a"/>
-    <rect x="17" y="27" width="11" height="5" rx="2.5" fill="#1e44bb"/>
-    <rect x="18" y="28" width="8" height="3" rx="1.5" fill="#6699ff" opacity=".65"/>
-    <rect x="32" y="27" width="11" height="5" rx="2.5" fill="#1e44bb"/>
-    <rect x="33" y="28" width="8" height="3" rx="1.5" fill="#6699ff" opacity=".65"/>
-    <path d="M18,45 Q30,49 42,45 L40,56 Q30,58 20,56Z" fill="#101020"/>
-    <ellipse cx="12" cy="38" rx="6.5" ry="5.5" fill="#13132a"/>
-    <ellipse cx="48" cy="38" rx="6.5" ry="5.5" fill="#13132a"/>
-    <path d="M20,10 Q25,7 30,7 Q35,7 40,10" stroke="rgba(70,70,160,.5)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    <circle cx="30" cy="30" r="28" fill="none" stroke="#181848" stroke-width="1" opacity=".6"/>
-  </svg>`;
-  const hpFill=hp>20?"#b02828":hp>10?"#8a1a1a":"#601010";
-  const hpTxt=hp>20?"#ffe8e8":"#ff9999";
-  const hpR=11;const hpCy=16;
-  const hpBadge=`<svg viewBox="0 0 24 29" width="26" height="31" style="position:absolute;bottom:-4px;right:-4px;z-index:2;filter:drop-shadow(0 2px 6px rgba(0,0,0,.95))">
-    <path d="M12,1 Q23,8 23,${hpCy} A${hpR},${hpR} 0 0,1 1,${hpCy} Q1,8 12,1 Z" fill="${hpFill}" stroke="#0a0a0a" stroke-width=".8"/>
-    <text x="12" y="${hpCy}" dominant-baseline="central" text-anchor="middle" fill="${hpTxt}" font-size="${hp>=10?10:11}" font-family="monospace" font-weight="bold">${hp}</text>
-  </svg>`;
-  return`<div id="${id}" class="hport${tgt?" tgt":""}" style="width:70px;height:70px;position:relative;flex-shrink:0">${isAI?aiSvg:plSvg}${hpBadge}</div>`;
+// ── HERO HP BAR (compact, replaces portrait) ──────────────
+function hHpBar(hp,isAI,tgt,id){
+  const pct=Math.max(0,Math.min(100,hp/50*100));
+  const barCol=hp>25?"#c03030":hp>12?"#b85020":"#882020";
+  const glow=hp<=12?"box-shadow:0 0 8px rgba(220,60,60,.7)":"";
+  // Small icon: skull for AI, shield for player
+  const icon=isAI
+    ?`<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="10" r="8" fill="#2a1010" stroke="#5a2020" stroke-width="1"/><ellipse cx="9" cy="10" rx="2.2" ry="2.5" fill="#cc2222"/><ellipse cx="15" cy="10" rx="2.2" ry="2.5" fill="#cc2222"/><ellipse cx="9" cy="10" rx="1.1" ry="1.3" fill="#ff4444" opacity=".7"/><ellipse cx="15" cy="10" rx="1.1" ry="1.3" fill="#ff4444" opacity=".7"/><path d="M9,14.5 L9,17 L11,17 L11,19 L13,19 L13,17 L15,17 L15,14.5" fill="#2a1010" stroke="#5a2020" stroke-width=".8"/></svg>`
+    :`<svg width="24" height="24" viewBox="0 0 24 24"><path d="M12,2 L20,6 L20,13 Q20,19 12,22 Q4,19 4,13 L4,6 Z" fill="#141430" stroke="#2a2a60" stroke-width="1.2"/><rect x="9" y="8" width="6" height="9" rx="1" fill="#1a1a50"/><rect x="10" y="9" width="4" height="4" rx=".5" fill="#3a5acc" opacity=".8"/><rect x="10.5" y="14" width="3" height="2" rx=".5" fill="#3a5acc" opacity=".6"/></svg>`;
+  return`<div id="${id}" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:${tgt?"pointer":"default"};${tgt?"filter:drop-shadow(0 0 6px rgba(200,48,48,.7));":""}">${icon}<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0"><div style="display:flex;align-items:center;gap:5px"><div class="hp-bar-track" style="${glow}"><div class="hp-bar-fill" style="width:${pct}%;background:${barCol}"></div></div><span style="font-size:10px;color:#cc8888;font-family:monospace;font-weight:bold;min-width:20px;text-align:right">${hp}</span></div></div></div>`;
 }
 // Fix 8: 3D diamond gem mana display
 function hMana(cur,max){
@@ -839,16 +805,18 @@ function showBattle(){
       ${turn==="ai"&&!over?`<span style="margin-left:auto;font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">對手思考中...</span>`:""}
     </div>
     <div class="ai-hand-wrap">${hAIFan(ai.hand.length,aiNewCard)}</div>
-    <div class="hero-row top">${hHeroPort(ai.hp,true,canTgt,"ah")}
-      <span style="font-size:10px;color:#888;font-family:monospace">場上隨從 ${ai.board.length}/7</span>
+    <div class="hp-bar-row top" style="padding:0 14px;gap:10px">
+      ${hHpBar(ai.hp,true,false,"ah")}
+      <span style="font-size:9px;color:#777;font-family:monospace;flex-shrink:0">場 ${ai.board.length}/7</span>
     </div>
     <div class="boards">
       <div class="brow" id="ab">${aiBd}</div>
       <div class="center-div"></div>
       <div class="brow" id="pb">${plBd}</div>
     </div>
-    <div class="hero-row bot" style="gap:20px">${hHeroPort(pl.hp,false,false,"ph")}
-      <span style="font-size:10px;color:#888;font-family:monospace">場上隨從 ${pl.board.length}/7</span>
+    <div class="hp-bar-row bot" style="padding:0 14px;gap:10px">
+      ${hHpBar(pl.hp,false,false,"ph")}
+      <span style="font-size:9px;color:#777;font-family:monospace;flex-shrink:0">場 ${pl.board.length}/7</span>
       ${modeH}
     </div>
     <div class="hand-wrap" id="hw">${hFan(pl.hand,selCard,pl.mana,lastDraws)}</div>
@@ -873,6 +841,8 @@ function showBattle(){
     const bc=document.getElementById("bcn");if(bc)bc.onclick=()=>act({t:"CL"});
     document.querySelectorAll(".em").forEach(e=>e.onclick=ev=>{ev.stopPropagation();act({t:"EM",i:+e.dataset.ei});});
     document.getElementById("ah").onclick=()=>act({t:"EH"});
+    // Also allow clicking the enemy hp-bar-row as hero target
+    document.querySelector(".hp-bar-row.top")?.addEventListener("click",()=>act({t:"EH"}));
   }
   addDragListeners();
   if(turn==="ai"&&!over&&!aiRunning){
