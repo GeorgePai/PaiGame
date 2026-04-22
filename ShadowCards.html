@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Shadow Cards</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 body{background:#070707;color:#e8e4d8;font-family:Georgia,serif;overflow:hidden;height:100vh;touch-action:none}
 #root{width:100vw;height:100vh;display:flex;flex-direction:column}
 button{font-family:Georgia,serif;cursor:pointer}
@@ -61,8 +61,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 .arrow-march{stroke-dasharray:14 10;animation:marchDash .55s linear infinite}
 
 .card-fw{animation:floatCard 2.2s ease-in-out infinite;animation-delay:var(--fd,0s)}
-/* flyIn plays first with forwards fill, then floatCard takes over — no transform conflict */
-.card-fw.new-card{animation:flyIn .72s cubic-bezier(.2,1.2,.6,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:0s,.72s}
+/* flyIn with staggered delay --dd for sequential draw animation */
+.card-fw.new-card{animation:flyIn .72s cubic-bezier(.2,1.2,.6,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:var(--dd,0s),calc(var(--dd,0s) + .72s)}
 .minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:50}
 .minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
@@ -100,7 +100,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .hand-wrap{flex-shrink:0;height:114px;background:#090909;border-top:1px solid #1a1a1a;overflow:visible;display:flex;justify-content:center;align-items:flex-end;padding-bottom:2px}
 /* Hint BELOW hand-wrap, as separate bar (not inside) */
 .hand-hint-bar{flex-shrink:0;height:14px;background:#090909;display:flex;align-items:center;justify-content:center;border-top:1px solid #0f0f0f}
-.hand-hint{font-size:8px;color:#383838;letter-spacing:2px;font-family:monospace}
+.hand-hint{font-size:8px;color:#b8a830;letter-spacing:2px;font-family:monospace}
 
 /* ── LOG ── */
 .gamelog-wrap{position:absolute;right:8px;top:4px;bottom:4px;width:148px;z-index:10}
@@ -124,7 +124,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 
 /* ── ZOOM ── */
 #zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.86);display:flex;align-items:center;justify-content:center;z-index:900;cursor:pointer}
-#zoom-overlay .card{transform:scale(2.6);pointer-events:none}
+#zoom-overlay .card{pointer-events:none;animation:zoomFloat 2.2s ease-in-out infinite}
+@keyframes zoomFloat{0%,100%{transform:scale(2.6) translateY(0)}50%{transform:scale(2.6) translateY(-8px)}}
 
 /* ── DECK ── */
 .dscreen{min-height:100vh;background:#070707;display:flex;flex-direction:column}
@@ -145,6 +146,22 @@ button{font-family:Georgia,serif;cursor:pointer}
 .mbg{min-height:100vh;background:#070707;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .deco{position:absolute;inset:0;opacity:.04;pointer-events:none}
 .go{position:absolute;inset:0;background:rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+/* ── MOBILE COMPACT (short/narrow screens) ── */
+@media (max-height: 760px) {
+  .topbar,.botbar{padding:3px 10px;gap:6px}
+  .ai-hand-wrap{height:72px;padding-top:2px}
+  .hero-row{height:62px}
+  .hand-wrap{height:96px}
+  .hand-hint-bar{display:none}
+}
+@media (max-height: 680px) {
+  .ai-hand-wrap{height:58px}
+  .hero-row{height:54px}
+  .hand-wrap{height:86px}
+  .brow{padding:2px 6px;gap:4px}
+}
+/* prevent board minions overflowing on narrow screens */
+.brow{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
 </style>
 </head>
 <body><div id="root"></div>
@@ -168,9 +185,9 @@ const CARDS=[
   {id:"s01",name:"暗影箭",  cost:1,type:"spell",effect:"dmg",  val:2,sym:"✦",desc:"造成2點傷害"},
   {id:"s02",name:"黑暗儀式",cost:2,type:"spell",effect:"draw", val:2,sym:"✧",desc:"抽2張牌"},
   {id:"s03",name:"黑暗護盾",cost:2,type:"spell",effect:"heal", val:8,sym:"✩",desc:"恢復8點生命"},
-  {id:"s04",name:"虛空爆破",cost:3,type:"spell",effect:"dmg",  val:4,sym:"✪",desc:"4點傷害 可全場"},
+  {id:"s04",name:"虛空爆破",cost:3,type:"spell",effect:"dmg",  val:4,sym:"✪",desc:"造成4點傷害"},
   {id:"s05",name:"吸魂術",  cost:4,type:"spell",effect:"drain",val:5,sym:"✫",desc:"吸取5點生命"},
-  {id:"s06",name:"混沌衝擊",cost:5,type:"spell",effect:"dmg",  val:7,sym:"✬",desc:"7點傷害 可全場"},
+  {id:"s06",name:"混沌衝擊",cost:5,type:"spell",effect:"dmg",  val:7,sym:"✬",desc:"造成7點傷害"},
 ];
 const getDef=id=>CARDS.find(c=>c.id===id);
 const DEF_DECK=["m01","m01","s01","s01","m02","m02","m03","m03","s02","s03","m04","m04","s04","m05","m05","m07","m07","m08","s05","m06","m06","m09","m09","m10","m11","m12","s06","m13","m14","m14"];
@@ -181,8 +198,8 @@ const shuf=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|(Math.rand
 const mk=def=>({...def,uid:uid(),curHp:def.hp||0,sick:true,attacked:false});
 const alog=(s,m)=>({...s,log:[m,...s.log.slice(0,29)]});
 const chk=s=>{if(s.player.hp<=0&&s.ai.hp<=0)return{...s,over:"draw"};if(s.player.hp<=0)return{...s,over:"lose"};if(s.ai.hp<=0)return{...s,over:"win"};return s;};
-const draw1=(s,who)=>{const p=s[who];if(!p.deck.length){return chk(alog({...s,[who]:{...p,hp:p.hp-5}},"💀"+(who==="player"?"你":"AI")+"牌庫空-5HP"));}const[d,...rest]=p.deck;if(p.hand.length>=10)return alog({...s,[who]:{...p,deck:rest}},d.name+"燒毀");return who==="player"?alog({...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},lastDraw:d.uid},"🃏抽："+d.name):{...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},aiNewCard:true};};
-const startT=(s0,who)=>{const p=s0[who],nm=Math.min(10,p.maxMana+1);let s={...s0,[who]:{...p,maxMana:nm,mana:nm,board:p.board.map(m=>({...m,sick:false,attacked:false}))},turn:who,mode:"default",selCard:null,selAtk:null,lastDraw:null,aiNewCard:false};s=draw1(s,who);if(!s.over)s=alog(s,"━━"+(who==="player"?"你的回合":"電腦回合")+"━━");return s;};
+const draw1=(s,who)=>{const p=s[who];if(!p.deck.length){return chk(alog({...s,[who]:{...p,hp:p.hp-5}},"💀"+(who==="player"?"你":"AI")+"牌庫空-5HP"));}const[d,...rest]=p.deck;if(p.hand.length>=10)return alog({...s,[who]:{...p,deck:rest}},d.name+"燒毀");return who==="player"?alog({...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},lastDraws:[...(s.lastDraws||[]),d.uid]},"🃏抽："+d.name):{...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},aiNewCard:true};};
+const startT=(s0,who)=>{const p=s0[who],nm=Math.min(10,p.maxMana+1);let s={...s0,[who]:{...p,maxMana:nm,mana:nm,board:p.board.map(m=>({...m,sick:false,attacked:false}))},turn:who,mode:"default",selCard:null,selAtk:null,lastDraws:[],aiNewCard:false};s=draw1(s,who);if(!s.over)s=alog(s,"━━"+(who==="player"?"你的回合":"電腦回合")+"━━");return s;};
 const playM=(s0,hi,who)=>{const p=s0[who],c=p.hand[hi];if(!c||c.type!=="minion"||p.mana<c.cost||p.board.length>=7)return s0;const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};return alog({...s0,[who]:{...p,mana:p.mana-c.cost,hand:p.hand.filter((_,i)=>i!==hi),board:[...p.board,mn]}},"⚔️"+(who==="player"?"你":"AI")+"召："+c.name);};
 const castS=(s0,hi,who,tw,ti)=>{
   const p=s0[who],c=p.hand[hi];
@@ -219,7 +236,7 @@ const castS=(s0,hi,who,tw,ti)=>{
   return chk(s);
 };
 const atkF=(s0,who,ai,tw,ti)=>{const a=s0[who].board[ai];if(!a||a.sick||a.attacked)return s0;if(ti===-1){let s={...s0,[who]:{...s0[who],board:s0[who].board.map((m,i)=>i===ai?{...m,attacked:true}:m)},[tw]:{...s0[tw],hp:s0[tw].hp-a.atk}};return chk(alog(s,"⚔️"+a.name+"→英雄-"+a.atk));}const d=s0[tw].board[ti];let s={...s0,[who]:{...s0[who],board:s0[who].board.map((m,i)=>i===ai?{...m,attacked:true,curHp:a.curHp-d.atk}:m).filter(m=>m.curHp>0)},[tw]:{...s0[tw],board:s0[tw].board.map((m,i)=>i===ti?{...m,curHp:d.curHp-a.atk}:m).filter(m=>m.curHp>0)}};return chk(alog(s,"⚔️"+a.name+"("+a.atk+")vs"+d.name+"("+d.atk+")"));};
-const newGame=pdeck=>{const pd=shuf(pdeck).map(id=>mk(getDef(id))),ad=shuf(DEF_DECK).map(id=>mk(getDef(id)));const ph=pd.splice(0,2),ah=ad.splice(0,2);let s={player:{hp:50,mana:0,maxMana:0,deck:pd,hand:ph,board:[]},ai:{hp:50,mana:0,maxMana:0,deck:ad,hand:ah,board:[]},turn:"player",mode:"default",selCard:null,selAtk:null,log:["遊戲開始！你先手。"],over:null,lastDraw:null,aiNewCard:false};return startT(s,"player");};
+const newGame=pdeck=>{const pd=shuf(pdeck).map(id=>mk(getDef(id))),ad=shuf(DEF_DECK).map(id=>mk(getDef(id)));const ph=pd.splice(0,2),ah=ad.splice(0,2);let s={player:{hp:50,mana:0,maxMana:0,deck:pd,hand:ph,board:[]},ai:{hp:50,mana:0,maxMana:0,deck:ad,hand:ah,board:[]},turn:"player",mode:"default",selCard:null,selAtk:null,log:["遊戲開始！你先手。"],over:null,lastDraws:[],aiNewCard:false};return startT(s,"player");};
 
 // ── AI SCRIPT SYSTEM ─────────────────
 function computeAiScript(s){
@@ -330,6 +347,7 @@ function executeAiScript(script,idx,onDone){
 // ── APP STATE ─────────────────────────
 let SCR="menu",DECK=[...DEF_DECK],GAME=null,aiRunning=false,logOpen=false,animLock=false;
 let deckEdit=[...DEF_DECK];
+let _prevBarH=null; // stores previous bar heights for selective animation
 let drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false};
 let deckDrag={active:false,id:null,ghost:null,sx:0,sy:0,moved:false};
 let lpTimer=null,listenersAdded=false,arrowEl=null,newSummonUid=null;
@@ -411,7 +429,7 @@ const hCard=(c,sel,faded,sm,glow)=>{
   ${svgHex(c.cost,"#3c96cc",hw,hh,hfs)}
   <div class="cname">${c.name}</div>${typeTag}
   <div class="csym">${c.sym}</div>
-  ${isM?svgTri(c.atk,"#d86018",tw,th,tfs)+svgDrop(c.hp,"#c22828","#ffe8e8",dw,dh,dfs):`<div class="cdesc">${c.desc||""}</div>`}
+  ${isM?svgTri(c.atk,"#d86018",tw,th,tfs)+svgDrop(c.hp,"#c22828","#ffe8e8",dw,th,dfs):`<div class="cdesc">${c.desc||""}</div>`}
 </div>`;};
 const hBack=()=>`<div class="cardback"><div style="width:56px;height:82px;border:1px solid #1e1e1e;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#1e1e1e;font-size:22px">◈</div></div>`;
 // Fix 1: field minion — consistent "— 隨從 —" label below name, symbol pushed down to avoid overlap
@@ -421,7 +439,7 @@ const hMinion=(m,sel,glow,ns)=>{const can=!m.sick&&!m.attacked,lo=m.curHp/m.hp<0
   <div class="mn">${m.name}</div>
   <div style="position:absolute;top:22px;left:0;right:0;text-align:center;font-size:5px;color:#9a7820;letter-spacing:.3px;font-family:monospace;pointer-events:none">— 隨從 —</div>
   <div class="ms">${m.sym}</div>
-  ${svgTri(m.atk,"#d86018",17,17,8)}${svgDrop(m.curHp,lo?"#881818":"#c22828","#ffe8e8",14,18,8)}</div>`;};
+  ${svgTri(m.atk,"#d86018",17,17,8)}${svgDrop(m.curHp,lo?"#881818":"#c22828","#ffe8e8",14,17,8)}</div>`;};
 function hHeroPort(hp,isAI,tgt,id){
   const gid=id+"g";
   const aiSvg=`<svg viewBox="0 0 60 60" width="70" height="70"><defs><radialGradient id="${gid}" cx="50%" cy="35%"><stop offset="0%" stop-color="#1e0808"/><stop offset="100%" stop-color="#040303"/></radialGradient></defs>
@@ -482,11 +500,15 @@ function hMana(cur,max){
   }
   return`<div style="display:flex;gap:2px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#4488cc;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
 }
-const hFan=(hand,selIdx,mana,lastDraw)=>{
+const hFan=(hand,selIdx,mana,lastDraws)=>{
   if(!hand.length)return`<div style="height:110px;display:flex;align-items:center;justify-content:center;color:#333;font-size:12px">手牌為空</div>`;
   const n=hand.length,ds=Math.min(n*4.5,36),step=n>1?ds/(n-1):0,cw=82,ov=n>7?18:n>5?26:36,tw=cw+(n-1)*ov;
-  let sl="";hand.forEach((c,i)=>{const ang=n>1?(i-(n-1)/2)*step:0,isSel=selIdx===i,cp=c.cost<=mana,isNew=c.uid===lastDraw,fd=floatDelay(i).toFixed(3);
-    sl+=`<div class="hs" data-hi="${i}" style="left:${i*ov}px;transform-origin:bottom center;transform:rotate(${ang}deg) translateY(${isSel?-24:0}px);z-index:${isSel?60:i};transition:transform .15s"><div class="card-fw${isNew?" new-card":""}" style="--fd:-${fd}s">${hCard(c,isSel,false,false,cp&&!isSel)}</div></div>`;});
+  let sl="";hand.forEach((c,i)=>{const ang=n>1?(i-(n-1)/2)*step:0,isSel=selIdx===i,cp=c.cost<=mana;
+    const drawIdx=(lastDraws||[]).indexOf(c.uid);
+    const isNew=drawIdx>=0;
+    const dd=isNew?`${drawIdx*550}ms`:"0s";
+    const fd=floatDelay(i).toFixed(3);
+    sl+=`<div class="hs" data-hi="${i}" style="left:${i*ov}px;transform-origin:bottom center;transform:rotate(${ang}deg) translateY(${isSel?-24:0}px);z-index:${isSel?60:i};transition:transform .15s"><div class="card-fw${isNew?" new-card":""}" style="--fd:-${fd}s;--dd:${dd}">${hCard(c,isSel,false,false,cp&&!isSel)}</div></div>`;});
   return`<div style="position:relative;width:${tw}px;height:120px">${sl}</div>`;};
 const hAIFan=(n,aiNew)=>{if(!n)return"";
   const ds=Math.min(n*4.5,36),step=n>1?ds/(n-1):0,ov=n>7?18:n>5?22:30,tw=68+(n-1)*ov,pad=40;
@@ -495,10 +517,28 @@ const hAIFan=(n,aiNew)=>{if(!n)return"";
   return`<div style="position:relative;width:${tw+pad*2}px;height:78px">${sl}</div>`;};
 
 // ── ZOOM ──────────────────────────────
-function showZoom(idx){if(!GAME)return;const c=GAME.player.hand[idx];if(!c)return;showZoomCard(c);}
-function showZoomCard(c){if(!c)return;hideZoom();const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=hCard(c,false,false,false,false);ov.onclick=()=>ov.remove();document.body.appendChild(ov);}
-// Fix 8: zoom a minion from the board (show as card using its original def)
-function showZoomMinion(m){if(!m)return;hideZoom();const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=hCard(m,false,false,false,false);ov.onclick=()=>ov.remove();document.body.appendChild(ov);}
+// hCardZoom: full-size card + label captions near each badge (shown at 2.6x scale)
+function hCardZoom(c){
+  const isM=c.type==="minion";
+  const bg=isM?"#f4f0e8":SPELL_BG;
+  const typeTag=`<div style="position:absolute;top:37px;left:0;right:0;text-align:center;font-size:6px;color:${isM?"#9a7020":"#aa4060"};font-family:monospace;letter-spacing:.5px;pointer-events:none">${isM?"— 隨從 —":"— 法術 —"}</div>`;
+  // Badge labels — visible at 2.6x zoom scale
+  // 魔力: right of hex (hex is top:2px left:2px size 20x22, center y≈13px → label top:8px)
+  const manaLbl=`<div style="position:absolute;top:26px;left:2px;width:20px;text-align:center;font-size:4.5px;color:#5599cc;font-family:monospace;letter-spacing:.3px;white-space:nowrap">魔力</div>`;
+  const atkLbl=isM?`<div style="position:absolute;bottom:24px;left:0;width:22px;text-align:center;font-size:4.5px;color:#d87030;font-family:monospace;letter-spacing:.3px">攻擊</div>`:"";
+  const hpLbl=isM?`<div style="position:absolute;bottom:24px;right:0;width:22px;text-align:center;font-size:4.5px;color:#c03030;font-family:monospace;letter-spacing:.3px">血量</div>`:"";
+  return`<div class="card" style="background:${bg}">
+  ${svgHex(c.cost,"#3c96cc",20,22,10)}
+  ${manaLbl}
+  <div class="cname">${c.name}</div>${typeTag}
+  <div class="csym">${c.sym}</div>
+  ${isM?svgTri(c.atk,"#d86018",19,19,9)+atkLbl+svgDrop(c.hp,"#c22828","#ffe8e8",17,19,9)+hpLbl:`<div class="cdesc">${c.desc||""}</div>`}
+</div>`;
+}
+function showZoom(idx){if(!GAME)return;const c=GAME.player.hand[idx];if(!c)return;_showZoomEl(hCardZoom(c));}
+function showZoomCard(c){if(!c)return;_showZoomEl(hCardZoom(c));}
+function showZoomMinion(m){if(!m)return;_showZoomEl(hCardZoom(m));}
+function _showZoomEl(html){hideZoom();const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=html;ov.onclick=()=>ov.remove();document.body.appendChild(ov);}
 function hideZoom(){const z=document.getElementById("zoom-overlay");if(z)z.remove();}
 
 // ── TOAST ──────────────────────────────
@@ -551,79 +591,132 @@ function buildDeck(){
   const cnt=id=>deckEdit.filter(x=>x===id).length,tot=deckEdit.length;
   const grp=[...deckEdit].sort((a,b)=>getDef(a).cost-getDef(b).cost).reduce((acc,id)=>{const l=acc[acc.length-1];if(l&&l.id===id)l.n++;else acc.push({id,n:1,c:getDef(id)});return acc;},[]);
 
-  // Fix 1: lock overlay uses exact card.sm dimensions (68×94), not inset:0 on .pc
+  // Fix 3: save scroll position before rebuilding
+  const savedScroll=document.querySelector(".pool")?.scrollTop??0;
+
   const lockSvg=`<svg width="28" height="30" viewBox="0 0 28 30"><path d="M7,13 V9 A7,7 0 0,1 21,9 V13" fill="none" stroke="#c8a832" stroke-width="3" stroke-linecap="round"/><rect x="2" y="13" width="24" height="15" rx="4" fill="#c8a832"/><circle cx="14" cy="20" r="3.5" fill="#0a0808"/><rect x="12.2" y="20" width="3.6" height="5" rx="1.8" fill="#0a0808"/></svg>`;
   let pi="";CARDS.forEach(c=>{
     const n=cnt(c.id),maxed=n>=2;
-    // Fix 1: overlay sized to match .card.sm exactly (68×94), positioned absolute over card
     const badge=maxed
-      ?`<div style="position:absolute;top:0;left:0;width:68px;height:94px;background:rgba(0,0,0,.74);border-radius:6px;border:2px solid #8B6a18;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;pointer-events:none">${lockSvg}<span style="color:#c8a832;font-size:7.5px;letter-spacing:.5px;font-family:monospace;font-weight:bold">×2 已達上限</span></div>`
-      :n===1?`<div style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.7);border-radius:3px;padding:1px 4px;font-size:7px;color:#888;font-family:monospace;pointer-events:none">×1</div>`:""
+      ?`<div style="position:absolute;inset:0;width:68px;height:94px;background:rgba(0,0,0,.74);border-radius:6px;border:2px solid #8B6a18;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;pointer-events:none">${lockSvg}<span style="color:#c8a832;font-size:7.5px;letter-spacing:.5px;font-family:monospace;font-weight:bold">×2 已達上限</span></div><div style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.82);border-radius:3px;padding:1px 5px;font-size:10px;color:#ff9933;font-family:monospace;font-weight:bold;pointer-events:none">×2</div>`
+      :n===1?`<div style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.82);border-radius:3px;padding:1px 5px;font-size:10px;color:#44aaff;font-family:monospace;font-weight:bold;pointer-events:none">×1</div>`:""
     pi+=`<div class="pc${maxed?" maxed":""}" data-id="${c.id}" title="${c.name}" style="position:relative;display:inline-block">${hCard(c,false,false,true,false)}${badge}</div>`;
   });
 
-  // Fix 4: mana cost distribution chart (costs 1-8+)
+  // Inline hex gem (no position:absolute)
+  const hexGem=(v,sz=14)=>{
+    const w=sz,h=Math.round(sz*1.15);
+    const pts=`${w/2},0 ${w},${h*.27} ${w},${h*.73} ${w/2},${h} 0,${h*.73} 0,${h*.27}`;
+    const hi=`${w/2},0 ${w},${h*.27} ${w*.62},${h*.42} ${w*.38},${h*.42}`;
+    const sh=`${w*.38},${h*.58} ${w*.62},${h*.58} ${w},${h*.73} ${w/2},${h} 0,${h*.73}`;
+    const fs=Math.round(sz*.48);
+    const lbl=v==="8+"?"8+":String(v);
+    return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible;display:block"><polygon points="${pts}" fill="#3c96cc"/><polygon points="${hi}" fill="rgba(255,255,255,.26)"/><polygon points="${sh}" fill="rgba(0,0,0,.2)"/><polygon points="${pts}" fill="none" stroke="rgba(255,255,255,.15)" stroke-width=".7"/><text x="${w/2}" y="${h*.5}" dominant-baseline="central" text-anchor="middle" fill="#e8f4ff" font-size="${fs}" font-family="monospace" font-weight="bold">${lbl}</text></svg>`;
+  };
+
   const costBuckets=Array(9).fill(0);
   deckEdit.forEach(id=>{const c=getDef(id);if(c)costBuckets[Math.min(8,c.cost)]++;});
   const maxB=Math.max(1,...costBuckets);
   const barColors=["#3a7acc","#3a7acc","#3a7acc","#3a7acc","#5a3a8a","#5a3a8a","#8a2a2a","#8a2a2a","#4a1a1a"];
+  // Fix 2: store target heights; render bars at height:0 first, animate via rAF after DOM insert
+  const targetHeights=[];
   let chartBars="";
   for(let i=1;i<=8;i++){
-    const h=Math.round((costBuckets[i]/maxB)*36);
-    const lbl=i===8?"8+":String(i);
+    const th=Math.round((costBuckets[i]/maxB)*36);
+    targetHeights.push({h:th,hasCards:costBuckets[i]>0});
+    const lbl=i===8?"8+":i;
     chartBars+=`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
-      <div style="font-size:7px;color:#444;font-family:monospace">${costBuckets[i]||""}</div>
+      <div style="font-size:7px;color:#a89030;font-family:monospace;min-height:10px">${costBuckets[i]||""}</div>
       <div style="width:100%;background:#0e0e0e;border-radius:1px;height:36px;display:flex;align-items:flex-end">
-        <div style="width:100%;height:${h}px;background:${barColors[i]};border-radius:1px 1px 0 0;transition:height .2s;min-height:${costBuckets[i]>0?2:0}px"></div>
+        <div class="cbar" style="width:100%;height:0px;background:${barColors[i]};border-radius:1px 1px 0 0;transition:height .38s cubic-bezier(.2,1,.4,1)"></div>
       </div>
-      <div style="font-size:7px;color:#3a3a3a;font-family:monospace">${lbl}</div>
+      <div style="display:flex;justify-content:center;margin-top:2px">${hexGem(lbl,13)}</div>
     </div>`;
   }
   const avgCost=tot>0?(deckEdit.reduce((s,id)=>s+(getDef(id)?.cost||0),0)/tot).toFixed(1):"—";
   const chart=`<div style="margin-top:10px;padding:8px 4px 4px;background:#0a0a0a;border:1px solid #151515;border-radius:3px">
     <div style="display:flex;gap:1px;align-items:flex-end">${chartBars}</div>
-    <div style="text-align:center;margin-top:5px;font-size:8px;color:#383838;font-family:monospace;letter-spacing:1px">平均費用 <span style="color:#555">${avgCost}</span></div>
+    <div style="text-align:center;margin-top:7px;font-size:8px;color:#a89030;font-family:monospace;letter-spacing:1px">平均費用 <span style="color:#d4c840">${avgCost}</span></div>
   </div>`;
 
-  // Fix 5: deck list with separators between items
   let li=grp.map(({id,n,c})=>`<div class="di" data-id="${id}" style="border-bottom:1px solid #161616">
-    <span style="color:#3a3a3a;font-family:monospace;font-size:10px;width:14px;flex-shrink:0">${c.cost}</span>
-    <span style="color:#d0ccc0;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
-    <span style="color:#3a3a3a;font-family:monospace;font-size:10px">×${n}</span>
+    <div style="flex-shrink:0;width:16px;display:flex;align-items:center;justify-content:center">${hexGem(c.cost,14)}</div>
+    <span style="color:${c.type==="spell"?"#58d878":"#e8e4d0"};font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:4px">${c.name}</span>
+    <span style="color:#a89030;font-family:monospace;font-size:10px">×${n}</span>
   </div>`).join("");
-  if(!grp.length)li=`<div style="color:#222;font-size:11px;text-align:center;margin-top:50px">牌組為空</div>`;
-  if(tot>0&&tot<30)li+=`<div style="margin-top:10px;font-size:10px;color:#444;text-align:center;letter-spacing:1px">還需 ${30-tot} 張</div>`;
+  if(!grp.length)li=`<div style="color:#666;font-size:11px;text-align:center;margin-top:50px">牌組為空</div>`;
+  if(tot>0&&tot<30)li+=`<div style="margin-top:10px;font-size:10px;color:#d4c840;text-align:center;letter-spacing:1px">還需 ${30-tot} 張</div>`;
 
   R().innerHTML=`<div class="dscreen"><div class="dhead">
     <button id="dbk" style="background:none;border:1px solid #222;color:#777;padding:6px 14px;font-size:11px">← 返回</button>
     <span style="font-size:16px;letter-spacing:4px;color:#ccc">我的卡牌</span>
     <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
-      <span style="font-size:12px;font-family:monospace;color:${tot===30?"#7d7":"#666"}">${tot}/30</span>
+      <span style="font-size:12px;font-family:monospace;color:${tot===30?"#7d7":"#d4c840"}">${tot}/30</span>
       <button id="dsv" style="padding:7px 16px;background:${tot===30?"#ede9dc":"#111"};color:${tot===30?"#000":"#444"};border:none;font-size:11px;letter-spacing:2px">儲存牌組</button>
     </div>
   </div><div class="dbody">
-    <div class="pool"><div style="font-size:9px;color:#3a3a3a;letter-spacing:3px;margin-bottom:12px">點擊加入 · 長按查看</div><div class="pgrid">${pi}</div></div>
+    <div class="pool"><div style="font-size:9px;color:#d4c840;letter-spacing:2px;margin-bottom:12px">卡牌庫 ← 點擊加入牌組 · 長按查看</div><div class="pgrid">${pi}</div></div>
     <div class="dlist" id="dlist">
       <div style="display:flex;align-items:center;margin-bottom:6px;gap:6px">
-        <div style="font-size:9px;color:#3a3a3a;letter-spacing:2px;flex:1">當前牌組 <span style="color:#2a2a2a;font-size:8px">↩ 拖出移除</span></div>
-        <button id="dclr" style="padding:3px 8px;background:none;border:1px solid #2a1a1a;color:#5a2a2a;font-size:9px;letter-spacing:1px;border-radius:2px">清空</button>
+        <div style="font-size:9px;color:#d4c840;letter-spacing:2px;flex:1">當前牌組 <span style="color:#a89830;font-size:8px">← 橫滑移除 · 長按查看</span></div>
+        <button id="dclr" style="padding:3px 8px;background:none;border:1px solid #2a1a1a;color:#c06040;font-size:9px;letter-spacing:1px;border-radius:2px">清空</button>
       </div>
       ${chart}
       <div style="margin-top:8px">${li}</div>
     </div>
   </div></div>`;
-  document.getElementById("dbk").onclick=()=>{SCR="menu";render();};
+
+  // Fix 3: restore pool scroll after DOM rebuild
+  const poolEl=document.querySelector(".pool");
+  if(poolEl)poolEl.scrollTop=savedScroll;
+
+  // Selective bar animation: only animate changed bars, others stay put
+  const prev=_prevBarH;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const bars=document.querySelectorAll(".cbar");
+    bars.forEach((bar,idx)=>{
+      const newH=targetHeights[idx]?.h??0;
+      const oldH=prev?prev[idx]:0;
+      if(oldH===newH){
+        // No change — snap to correct height, no transition
+        bar.style.transition="none";
+        bar.style.height=newH+"px";
+      }else{
+        // Changed — animate smoothly
+        bar.style.transition="none";
+        bar.style.height=oldH+"px";
+        // Force layout then animate
+        bar.offsetHeight; // eslint-disable-line
+        bar.style.transition="height .42s cubic-bezier(.2,1,.4,1)";
+        bar.style.height=newH+"px";
+      }
+    });
+  }));
+  _prevBarH=targetHeights.map(t=>t?.h??0);
+
+  document.getElementById("dbk").onclick=()=>{_prevBarH=null;SCR="menu";render();};
   document.getElementById("dsv").onclick=()=>{if(tot===30){DECK=[...deckEdit];SCR="menu";render();}};
-  // Fix 2: clear all button
   document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;deckEdit=[];buildDeck();};
+
   // Pool card interactions
   document.querySelectorAll(".pc[data-id]").forEach(card=>{
     const id=card.dataset.id;let lpT=null,lpW=false;
-    const startLP=()=>{lpW=false;lpT=setTimeout(()=>{lpT=null;lpW=true;showZoomCard(getDef(id));},500);};
-    const endLP=()=>{if(lpT){clearTimeout(lpT);lpT=null;}};
+    const startLP=()=>{
+      lpW=false;
+      lpT=setTimeout(()=>{
+        lpT=null;lpW=true;
+        showZoomCard(getDef(id));
+        // Zoom overlay now covers the card — listen on document for the release
+        document.addEventListener("mouseup",hideZoom,{once:true});
+        document.addEventListener("touchend",hideZoom,{once:true});
+      },500);
+    };
+    const cancelLP=()=>{if(lpT){clearTimeout(lpT);lpT=null;}};
     card.addEventListener("mousedown",(e)=>{if(e.button===0)startLP();});
     card.addEventListener("touchstart",startLP,{passive:true});
-    card.addEventListener("mouseup",endLP);card.addEventListener("touchend",endLP);card.addEventListener("mouseleave",endLP);
+    card.addEventListener("mouseup",cancelLP);
+    card.addEventListener("touchend",cancelLP);
+    card.addEventListener("mouseleave",cancelLP);
     card.addEventListener("click",()=>{
       if(lpW){lpW=false;return;}
       if(cnt(id)>=2)return;
@@ -632,54 +725,104 @@ function buildDeck(){
       setTimeout(()=>{deckEdit=[...deckEdit,id];buildDeck();},300);
     });
   });
-  // Deck list drag to remove
+
+  // Deck list: long-press zoom + scroll-safe horizontal drag to remove
   document.querySelectorAll(".di[data-id]").forEach(item=>{
     const id=item.dataset.id;
-    const startDrag=(e)=>{
-      e.preventDefault();
-      const p=pt(e);deckDrag={active:true,id,ghost:null,sx:p.x,sy:p.y,moved:false};
-      document.addEventListener("mousemove",deckDragMv,{passive:false});document.addEventListener("mouseup",deckDragUp);
-      document.addEventListener("touchmove",deckDragMv,{passive:false});document.addEventListener("touchend",deckDragUp);
-    };
-    item.addEventListener("mousedown",startDrag);item.addEventListener("touchstart",startDrag,{passive:false});
+    let diLpT=null,diLpW=false;
+    const diStartLP=()=>{diLpW=false;diLpT=setTimeout(()=>{
+      diLpT=null;diLpW=true;
+      showZoomCard(getDef(id));
+      document.addEventListener("mouseup",hideZoom,{once:true});
+      document.addEventListener("touchend",hideZoom,{once:true});
+    },500);};
+    const diCancelLP=()=>{if(diLpT){clearTimeout(diLpT);diLpT=null;}};
+    const diReleaseLP=()=>{diCancelLP();hideZoom();};
+    // Mouse: long-press detection + drag
+    item.addEventListener("mousedown",(e)=>{
+      diStartLP();
+      const p=pt(e);
+      deckDrag={active:true,id,ghost:null,sx:p.x,sy:p.y,moved:false};
+      document.addEventListener("mousemove",deckDragMv,{passive:false});
+      document.addEventListener("mouseup",deckDragUp);
+      document.addEventListener("mouseup",diReleaseLP,{once:true});
+    });
+    item.addEventListener("mouseleave",diCancelLP);
+    // Touch: long-press + direction-aware drag
+    item.addEventListener("touchstart",(e)=>{
+      diStartLP();
+      const p=pt(e);
+      item._tStart={x:p.x,y:p.y,id,decided:false};
+    },{passive:true});
+    item.addEventListener("touchmove",(e)=>{
+      const ts=item._tStart;if(!ts||ts.decided)return;
+      const p=pt(e);
+      const dx=Math.abs(p.x-ts.x),dy=Math.abs(p.y-ts.y);
+      if(dx<6&&dy<6)return;
+      ts.decided=true;
+      diCancelLP(); // cancel long-press on any move
+      if(dy>dx){item._tStart=null;}
+      else{
+        e.preventDefault();
+        deckDrag={active:true,id:ts.id,ghost:null,sx:ts.x,sy:ts.y,moved:false};
+        item._tStart=null;
+        document.addEventListener("touchmove",deckDragMv,{passive:false});
+        document.addEventListener("touchend",deckDragUp);
+      }
+    },{passive:false});
+    item.addEventListener("touchend",()=>{item._tStart=null;diReleaseLP();});
   });
 }
 
 // ── MENU ─────────────────────────────
 function showMenu(){
   let deco="";for(let i=0;i<12;i++)deco+=`<div style="position:absolute;left:${(i%4)*25}%;top:${Math.floor(i/4)*33}%;font-size:80px;color:#fff;transform:rotate(${i*30}deg)">◈</div>`;
-  R().innerHTML=`<div class="mbg"><div class="deco">${deco}</div>
-    <div style="text-align:center;margin-bottom:64px;position:relative">
+  R().innerHTML=`<div class="mbg" id="mbg"><div class="deco">${deco}</div>
+    <div style="text-align:center;margin-bottom:64px;position:relative;z-index:1">
       <div style="font-size:3px;color:#222;letter-spacing:20px;font-family:monospace">▬▬▬▬▬▬▬▬▬</div>
-      <div style="font-size:48px;font-weight:bold;letter-spacing:10px;color:#ede9dc;text-shadow:0 0 60px rgba(240,236,224,.12);margin:16px 0 10px">SHADOW CARDS</div>
+      <div id="menu-title" style="font-size:48px;font-weight:bold;letter-spacing:10px;color:#ede9dc;margin:16px 0 10px">SHADOW CARDS</div>
       <div style="font-size:12px;color:#555;letter-spacing:6px">黑暗卡牌對戰</div>
       <div style="font-size:3px;color:#222;letter-spacing:20px;font-family:monospace;margin-top:16px">▬▬▬▬▬▬▬▬▬</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:14px;width:260px;position:relative">
+    <div style="display:flex;flex-direction:column;gap:14px;width:260px;position:relative;z-index:1">
       <button id="bs" style="padding:17px 0;background:#ede9dc;color:#0a0a0a;border:none;border-radius:2px;font-size:14px;letter-spacing:4px">⚔  開始遊戲</button>
       <button id="bd" style="padding:17px 0;background:transparent;color:#666;border:1px solid #222;border-radius:2px;font-size:14px;letter-spacing:4px">◈  我的卡牌</button>
     </div>
-    <div style="position:absolute;bottom:24px;font-size:10px;color:#222;letter-spacing:4px;font-family:monospace">${CARDS.length} CARDS IN COLLECTION</div>
+    <div style="position:absolute;bottom:24px;font-size:10px;color:#222;letter-spacing:4px;font-family:monospace;z-index:1">${CARDS.length} CARDS IN COLLECTION</div>
   </div>`;
-  document.getElementById("bs").onclick=()=>{GAME=newGame(DECK);SCR="battle";render();};
-  document.getElementById("bd").onclick=()=>{SCR="deck";render();};
+  document.getElementById("bs").onclick=()=>{GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
+  document.getElementById("bd").onclick=()=>{SCR="deck";stopFireflies();render();};
+
+  // Purple title glow — slow breathing ~3s cycle
+  const title=document.getElementById("menu-title");
+  let titleT=0,titleRaf;
+  function animTitle(){
+    if(!document.getElementById("menu-title")){return;}
+    titleT+=0.022;
+    const g=0.45+0.45*Math.sin(titleT);
+    title.style.textShadow=`0 0 ${20+40*g}px rgba(160,60,255,${(g*.85).toFixed(2)}), 0 0 ${8+16*g}px rgba(200,100,255,${(g*.5).toFixed(2)}), 0 0 60px rgba(240,236,224,.08)`;
+    titleRaf=requestAnimationFrame(animTitle);
+  }
+  animTitle();
+  window._menuCleanup=()=>{cancelAnimationFrame(titleRaf);delete window._menuCleanup;};
 }
+function stopFireflies(){if(window._menuCleanup)window._menuCleanup();}
 
 // ── SHOW BATTLE ───────────────────────
 function showBattle(){
-  const g=GAME,{player:pl,ai,turn,mode,selCard,selAtk,log,over,lastDraw,aiNewCard}=g;
-  const isP=turn==="player"&&!over&&!animLock,canTgt=mode==="targeting"||mode==="attacking";
-  // AI board: pass newSummonUid for summon animation
+  const g=GAME,{player:pl,ai,turn,mode,selCard,selAtk,log,over,lastDraws,aiNewCard}=g;
+  const isP=turn==="player"&&!over&&!animLock,canTgt=mode==="attacking";
+  // Fix 3: scale board row when many minions
+  const bScale=(n)=>n>4?Math.max(0.72,4/n).toFixed(2):"1";
   const aiBd=ai.board.length
-    ?ai.board.map((m,i)=>`<div class="em" data-ei="${i}">${hMinion(m,false,canTgt,m.uid===newSummonUid)}</div>`).join("")
+    ?`<div style="display:flex;gap:6px;align-items:center;transform:scale(${bScale(ai.board.length)});transform-origin:center">${ai.board.map((m,i)=>`<div class="em" data-ei="${i}">${hMinion(m,false,false,m.uid===newSummonUid)}</div>`).join("")}</div>`
     :`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 敵方戰場 —</div>`;
   const plBd=pl.board.length
-    ?pl.board.map((m,i)=>`<div class="om" data-oi="${i}">${hMinion(m,selAtk===i,false,m.uid===newSummonUid)}</div>`).join("")
+    ?`<div style="display:flex;gap:6px;align-items:center;transform:scale(${bScale(pl.board.length)});transform-origin:center">${pl.board.map((m,i)=>`<div class="om" data-oi="${i}">${hMinion(m,selAtk===i,false,m.uid===newSummonUid)}</div>`).join("")}</div>`
     :`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 我方戰場 —</div>`;
   const logH=log.map((l,i)=>`<div class="gl${i===0?" lx":""}">${l}</div>`).join("");
-  const modeH=mode==="targeting"
-    ?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選擇目標</span>${(()=>{const c=pl.hand[selCard];return c&&c.effect==="dmg"?`<button id="ball" style="padding:5px 10px;background:rgba(200,50,50,.15);border:1px solid rgba(200,80,50,.5);color:#e08060;font-size:10px;border-radius:2px;margin-left:6px">全場</button>`:"";})()}`
-    :mode==="attacking"?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選攻擊目標</span>`:"";
+  // Fix 1: remove targeting mode UI — spells are drag-only now
+  const modeH=mode==="attacking"?`<span style="font-size:11px;color:#d4c870;font-style:italic">→ 選攻擊目標</span>`:"";
   const canEnd=isP&&!pl.hand.some(c=>c.cost<=pl.mana)&&!pl.board.some(m=>!m.sick&&!m.attacked);
   const goH=over?`<div class="go">
     <div style="font-size:52px;margin-bottom:12px">${over==="win"?"⚔️":over==="lose"?"💀":"⚖️"}</div>
@@ -708,10 +851,10 @@ function showBattle(){
       <span style="font-size:10px;color:#888;font-family:monospace">場上隨從 ${pl.board.length}/7</span>
       ${modeH}
     </div>
-    <div class="hand-wrap" id="hw">${hFan(pl.hand,selCard,pl.mana,lastDraw)}</div>
+    <div class="hand-wrap" id="hw">${hFan(pl.hand,selCard,pl.mana,lastDraws)}</div>
     <div class="hand-hint-bar"><span class="hand-hint">長按放大查看 · 手牌上限 10 張 · 場上上限 7 張</span></div>
     <div class="botbar">
-      <div style="font-size:10px;color:#c0c0b0;letter-spacing:1px">我方本回合魔力</div>
+      <div style="font-size:10px;color:#c0c0b0;letter-spacing:1px">本回合魔力</div>
       ${hMana(pl.mana,pl.maxMana)}
       <span style="font-size:10px;color:#aaa;font-family:monospace;margin-left:6px">手牌 ${pl.hand.length}/10</span>
       <span style="font-size:10px;color:#888;font-family:monospace;margin-left:4px">牌庫剩餘 ${pl.deck.length}</span>
@@ -730,15 +873,6 @@ function showBattle(){
     const bc=document.getElementById("bcn");if(bc)bc.onclick=()=>act({t:"CL"});
     document.querySelectorAll(".em").forEach(e=>e.onclick=ev=>{ev.stopPropagation();act({t:"EM",i:+e.dataset.ei});});
     document.getElementById("ah").onclick=()=>act({t:"EH"});
-    const ball=document.getElementById("ball");if(ball)ball.onclick=()=>act({t:"EA"});
-    // Fix 2: for heal/drain targeting, own hero and own minions are also valid targets
-    if(mode==="targeting"&&g.player.hand[selCard]){
-      const sc=g.player.hand[selCard];
-      if(sc.effect==="heal"||sc.effect==="drain"){
-        const ph=document.getElementById("ph");if(ph){ph.style.cursor="pointer";ph.onclick=()=>act({t:"PH"});}
-        document.querySelectorAll(".om").forEach(e=>e.onclick=ev=>{ev.stopPropagation();act({t:"PM",i:+e.dataset.oi});});
-      }
-    }
   }
   addDragListeners();
   if(turn==="ai"&&!over&&!aiRunning){
@@ -841,7 +975,21 @@ function onUp(e){
         const slot=ss!=null?ss:GAME.player.board.length;
         act({t:"HC_AT",i:sc,slot});return;
       }
-      if(card&&card.type!=="minion"){const cl=closestTarget(p.x,p.y);if(cl&&cl.dist<READY*1.4){const em=cl.el.closest(".em"),isH=cl.el.id==="ah";if(em){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});return;}if(isH){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EH"});return;}}}
+      if(card&&card.type!=="minion"){
+        const cl=closestTarget(p.x,p.y);
+        if(cl&&cl.dist<READY*1.4){
+          const em=cl.el.closest(".em"),isH=cl.el.id==="ah";
+          if(em){act({t:"EM",i:+em.dataset.ei});return;}
+          if(isH){act({t:"EH"});return;}
+        }
+        // Also check own minions/hero as drop targets for heal/drain/dmg
+        const el2=document.elementFromPoint(p.x,p.y);
+        if(el2){
+          const om=el2.closest(".om"),ph=el2.closest("#ph");
+          if(om&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc};act({t:"PM",i:+om.dataset.oi});return;}
+          if(ph&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc};act({t:"PH"});return;}
+        }
+      }
       const el=document.elementFromPoint(p.x,p.y);if(el)handDrop(sc,ss,el);
     }
   }else if(type==="board"){
@@ -947,15 +1095,20 @@ function act(a){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}
     if(c.type==="minion"){if(g.player.board.length>=7){toast("戰場已滿！","err");return;}const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};const nb=[...g.player.board,mn];GAME={...alog({...g,player:{...g.player,mana:g.player.mana-c.cost,hand:g.player.hand.filter((_,i)=>i!==a.i),board:nb}},`⚔️你召：${c.name}`),selCard:null,selAtk:null,mode:"default"};newSummonUid=mn.uid;setTimeout(()=>{newSummonUid=null;},500);}
     else if(c.effect==="draw"){
-      // animate cards flying into hand
-      animDrawCards(c.val,"player",200);
+      // Draw spells: cast directly by click (no target needed)
       GAME={...castS(g,a.i,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
-    }else if(c.effect==="heal"||c.effect==="drain"){
-      // Fix 2: heal/drain needs a target — enter targeting mode like dmg spells
-      GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};
-    }else{GAME=g.selCard===a.i?{...g,selCard:null,mode:"default"}:{...g,selCard:a.i,mode:"targeting",selAtk:null};}
+    }else{
+      // All other spells (dmg/heal/drain): drag-only, clicking shows hint
+      toast("請拖曳法術卡到目標","warn");return;
+    }
   }else if(a.t==="OM"){
-    if(g.mode==="targeting"){GAME={...g,selCard:null,mode:"default"};}
+    if(g.mode==="targeting"){
+      const card=g.player.hand[g.selCard];
+      if(card&&(card.effect==="dmg"||card.effect==="heal"||card.effect==="drain")){
+        act({t:"PM",i:a.i});return;
+      }
+      GAME={...g,selCard:null,mode:"default"};
+    }
     else{const m=g.player.board[a.i];if(!m)return;if(m.sick){toast("召喚後本回合不能攻擊","warn");return;}if(m.attacked){toast("此隨從本回合已行動","warn");return;}GAME=g.selAtk===a.i?{...g,selAtk:null,mode:"default"}:{...g,selAtk:a.i,mode:"attacking",selCard:null};}
   }else if(a.t==="EM"){
     if(g.mode==="targeting"&&g.selCard!=null){
@@ -972,11 +1125,12 @@ function act(a){
       GAME=ns;
     }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",-1);return;}
   }else if(a.t==="PH"){
-    // Own hero as spell target (heal self)
+    // Own hero as spell target (heal self or dmg self)
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
+      const isHeal=card&&card.effect==="heal";
       const ns={...castS(g,g.selCard,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
-      if(card){const ph=document.getElementById("ph");if(ph){const r=ph.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,true);}}
+      if(card){const ph=document.getElementById("ph");if(ph){const r=ph.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,isHeal);}}
       GAME=ns;
     }
   }else if(a.t==="PM"){
@@ -1008,7 +1162,7 @@ function render(){
   else if(SCR==="battle"&&GAME)showBattle();
   if(GAME&&!GAME.over&&GAME.turn==="player"&&_lastTurn!=="player"){setTimeout(()=>toast("你的回合！","ok"),90);}
   _lastTurn=GAME?.turn??null;
-  if(GAME&&(GAME.lastDraw||GAME.aiNewCard)){setTimeout(()=>{if(GAME)GAME={...GAME,lastDraw:null,aiNewCard:false};},580);}
+  if(GAME&&(GAME.lastDraws?.length||GAME.aiNewCard)){setTimeout(()=>{if(GAME)GAME={...GAME,lastDraws:[],aiNewCard:false};},2200);}
 }
 try{render();}catch(e){R().innerHTML=`<div style="color:#f66;padding:30px;font-family:monospace;background:#111;min-height:100vh"><b>ERROR:</b><br><br>${e.stack.replace(/\n/g,"<br>")}</div>`;}
 </script>
