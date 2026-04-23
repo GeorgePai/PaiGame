@@ -31,7 +31,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .minion.atk-sel{background:#1a1a1a;border:2px solid #ffd700!important;box-shadow:0 0 16px rgba(255,215,0,.65)!important;animation:none!important}
 .minion.glow{border:2px dashed #c83030!important;box-shadow:0 0 10px rgba(200,50,50,.4)!important}
 .minion.sick{opacity:.62}
-.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:200!important;isolation:isolate}
+.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:500!important;isolation:isolate;position:relative}
 .minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 .minion .mn{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:7px;font-weight:bold;color:#111;padding:0 3px;line-height:1.1}
@@ -64,7 +64,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .card-fw{animation:floatCard 2.2s ease-in-out infinite;animation-delay:var(--fd,0s)}
 /* flyIn with staggered delay --dd for sequential draw animation */
 .card-fw.new-card{animation:flyIn .95s cubic-bezier(.15,1.1,.5,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:var(--dd,0s),calc(var(--dd,0s) + .95s)}
-.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:200!important;isolation:isolate}
+.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:500!important;isolation:isolate;position:relative}
 .minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 .hs{position:absolute;bottom:0;cursor:grab;user-select:none;-webkit-user-select:none}
@@ -99,9 +99,9 @@ button{font-family:Georgia,serif;cursor:pointer}
 .hp-bar-fill{height:100%;border-radius:5px;transition:width .55s cubic-bezier(.25,.8,.25,1)}
 .hp-bar-fill.hit{animation:hpFlash .5s ease-out}
 .ai-hand-wrap{flex-shrink:0;height:108px;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;background:#090909;border-bottom:1px solid #1a1a1a;overflow:visible}
-.boards{flex:1;display:flex;flex-direction:column;min-height:0;background:#0c0c0c;position:relative;overflow:visible}
-.brow{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 8px;min-height:64px;overflow:visible}
-.center-div{height:1px;background:#181818;flex-shrink:0}
+.boards{flex:1;display:flex;flex-direction:column;min-height:0;background:#0c0c0c;position:relative;overflow:visible;z-index:1}
+.brow{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 8px;min-height:64px;overflow:visible;position:relative}
+.center-div{height:1px;background:#181818;flex-shrink:0;position:relative;z-index:0}
 .hand-wrap{flex-shrink:0;height:114px;background:#090909;border-top:1px solid #1a1a1a;overflow:visible;display:flex;justify-content:center;align-items:flex-end;padding-bottom:2px}
 /* Hint BELOW hand-wrap, as separate bar (not inside) */
 .hand-hint-bar{flex-shrink:0;height:14px;background:#090909;display:flex;align-items:center;justify-content:center;border-top:1px solid #0f0f0f}
@@ -187,7 +187,7 @@ const CARDS=[
   {id:"m14",name:"古代巨神",cost:8,type:"minion",atk:7,hp:8,sym:"◬"},
   {id:"s01",name:"暗影箭",  cost:1,type:"spell",effect:"dmg",  val:2,sym:"✦",desc:"造成2點傷害"},
   {id:"s02",name:"黑暗儀式",cost:2,type:"spell",effect:"draw", val:2,sym:"✧",desc:"抽2張牌"},
-  {id:"s03",name:"黑暗護盾",cost:2,type:"spell",effect:"heal", val:8,sym:"✩",desc:"恢復8點生命"},
+  {id:"s03",name:"黑暗護盾",cost:2,type:"spell",effect:"heal", val:8,sym:"✩",desc:"恢復玩家8點生命"},
   {id:"s04",name:"虛空爆破",cost:3,type:"spell",effect:"dmg",  val:4,sym:"✪",desc:"造成4點傷害"},
   {id:"s05",name:"吸魂術",  cost:4,type:"spell",effect:"drain",val:5,sym:"✫",desc:"吸取5點生命"},
   {id:"s06",name:"混沌衝擊",cost:5,type:"spell",effect:"dmg",  val:7,sym:"✬",desc:"造成7點傷害"},
@@ -969,17 +969,36 @@ function onMove(e){
   }
   if(!drag.dragging)return;if(drag.ghost){drag.ghost.style.left=p.x+"px";drag.ghost.style.top=p.y+"px";}
   const card=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
-  if(drag.type==="hand"&&card&&card.type==="minion"){const slot=getSlot(p.x);if(slot!==drag.insertSlot){drag.insertSlot=slot;updateSlots(slot);}}
+  if(drag.type==="hand"&&card&&card.type==="minion"){
+    const slot=getSlot(p.x);if(slot!==drag.insertSlot){drag.insertSlot=slot;updateSlots(slot);}
+    // Fix 2+3: orange glow on ghost + battlefield indicator when above hand-wrap
+    const hwEl=document.querySelector(".hand-wrap");
+    const onBoard=hwEl&&p.y<hwEl.getBoundingClientRect().top;
+    const gh=document.getElementById("drag-ghost");
+    if(gh){gh.style.filter=onBoard?"drop-shadow(0 0 18px rgba(255,148,30,.95)) drop-shadow(0 0 8px rgba(255,148,30,.6))":"";}
+    let ri=document.getElementById("cast-ready-ring");
+    if(onBoard){
+      if(!ri){ri=document.createElement("div");ri.id="cast-ready-ring";ri.style.cssText="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:990;background:rgba(255,148,30,.12);border:2px solid rgba(255,148,30,.75);border-radius:8px;padding:5px 20px;font-size:12px;color:#ffb040;font-family:monospace;letter-spacing:2px;box-shadow:0 0 22px rgba(255,148,30,.45)";ri.textContent="✦ 放開召喚";document.body.appendChild(ri);}
+    }else{if(ri)ri.remove();}
+  }
   else{
-    // Fix: draw spells have no target — don't show proximity arrow
-    if(!(card&&card.effect==="draw")) updateProxArrow(p.x,p.y);
-    // Fix 1: draw spell cast-ready orange ring when dragged 80px up
-    if(card&&card.effect==="draw"){
+    // Fix: draw/heal spells have no target — don't show proximity arrow
+    if(!(card&&(card.effect==="draw"||card.effect==="heal"))) updateProxArrow(p.x,p.y);
+    // Fix 2+3: orange glow + battlefield indicator for draw/heal spells when dragged 80px up
+    if(card&&(card.effect==="draw"||card.effect==="heal")){
       const vertDist=drag.startY-p.y;
+      const gh=document.getElementById("drag-ghost");
+      if(gh){gh.style.filter=vertDist>=80?"drop-shadow(0 0 18px rgba(255,148,30,.95)) drop-shadow(0 0 8px rgba(255,148,30,.6))":" ";}
       let ri=document.getElementById("cast-ready-ring");
       if(vertDist>=80){
-        if(!ri){ri=document.createElement("div");ri.id="cast-ready-ring";ri.style.cssText="position:fixed;bottom:118px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:990;background:rgba(255,148,30,.12);border:2px solid rgba(255,148,30,.75);border-radius:8px;padding:4px 20px;font-size:11px;color:#ffb040;font-family:monospace;letter-spacing:2px;box-shadow:0 0 22px rgba(255,148,30,.45)";ri.textContent="✦ 放開施放";document.body.appendChild(ri);}
+        if(!ri){ri=document.createElement("div");ri.id="cast-ready-ring";ri.style.cssText="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:990;background:rgba(255,148,30,.12);border:2px solid rgba(255,148,30,.75);border-radius:8px;padding:5px 20px;font-size:12px;color:#ffb040;font-family:monospace;letter-spacing:2px;box-shadow:0 0 22px rgba(255,148,30,.45)";ri.textContent="✦ 放開施放";document.body.appendChild(ri);}
       }else{if(ri)ri.remove();}
+    }
+    // Fix 2: orange glow on ghost for targeted spells (dmg/drain) when near a target
+    if(card&&(card.effect==="dmg"||card.effect==="drain")){
+      const cl=closestTarget(p.x,p.y);
+      const gh=document.getElementById("drag-ghost");
+      if(gh){gh.style.filter=cl&&cl.dist<READY*1.4?"drop-shadow(0 0 18px rgba(255,148,30,.95)) drop-shadow(0 0 8px rgba(255,148,30,.6))":" ";}
     }
   }
 }
@@ -1001,17 +1020,23 @@ function onUp(e){
       if(invalid||card&&card.cost>GAME.player.mana){toast("魔力不足！","err");return;}
       if(card&&card.type==="minion"&&GAME.player.board.length>=7){toast("戰場已滿！","err");return;}
       if(card&&card.type==="minion"){
+        // Fix 1: only summon if released above hand-wrap (i.e. on the board area)
+        const hwEl=document.querySelector(".hand-wrap");
+        if(hwEl){const hr=hwEl.getBoundingClientRect();if(p.y>=hr.top){return;}} // still in hand area — cancel
         const slot=ss!=null?ss:GAME.player.board.length;
         act({t:"HC_AT",i:sc,slot});return;
       }
       if(card&&card.type!=="minion"){
         // Fix 1: draw spells use savedStartY for vertical distance check
         const vertDist=savedStartY-p.y;
-        if(card.effect==="draw"){
+        if(card.effect==="draw"||card.effect==="heal"){
           if(vertDist<80){return;}
-          const g=GAME;
-          GAME={...castS(g,sc,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
-          render(); // Fix: must re-render so DOM reflects new hand before next interaction
+          const g2=GAME;
+          GAME={...castS(g2,sc,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
+          if(card.effect==="heal"){
+            setTimeout(()=>{const ph=document.getElementById("ph");if(ph){const r=ph.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,true);}},60);
+          }
+          render();
           return;
         }
         // Fix 3: always set selCard+mode:"targeting" before dispatch
@@ -1133,9 +1158,13 @@ function act(a){
   }else if(a.t==="HC"){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}
     if(c.type==="minion"){if(g.player.board.length>=7){toast("戰場已滿！","err");return;}const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};const nb=[...g.player.board,mn];GAME={...alog({...g,player:{...g.player,mana:g.player.mana-c.cost,hand:g.player.hand.filter((_,i)=>i!==a.i),board:nb}},`⚔️你召：${c.name}`),selCard:null,selAtk:null,mode:"default"};newSummonUid=mn.uid;setTimeout(()=>{newSummonUid=null;},500);}
-    else if(c.effect==="draw"){
-      // Draw spells: cast directly by click (no target needed)
+    else if(c.effect==="draw"||c.effect==="heal"){
+      // Self-cast spells — no target, cast immediately
       GAME={...castS(g,a.i,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
+      if(c.effect==="heal"){
+        setTimeout(()=>{const ph=document.getElementById("ph");if(ph){const r=ph.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,c.val,true);}},60);
+      }
+      render();
     }else{
       // All other spells (dmg/heal/drain): drag-only, clicking shows hint
       toast("請拖曳法術卡到目標","warn");return;
