@@ -49,13 +49,14 @@ button{font-family:Georgia,serif;cursor:pointer}
 @keyframes floatCard{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 @keyframes flyIn{0%{transform:translateX(320px) scale(.12) rotate(20deg);opacity:0}60%{transform:translateX(-6px) scale(1.06) rotate(-1deg);opacity:1}100%{transform:translateX(0) scale(1) rotate(0);opacity:1}}
 @keyframes hpFlash{0%{filter:brightness(1)}30%{filter:brightness(2.5) saturate(1.4)}100%{filter:brightness(1)}}
+@keyframes hpShake{0%,100%{transform:translateX(0)}18%{transform:translateX(-5px)}36%{transform:translateX(5px)}54%{transform:translateX(-4px)}72%{transform:translateX(3px)}88%{transform:translateX(-2px)}}
 @keyframes lunge{0%{transform:translate(0,0) scale(1)}40%{transform:translate(var(--lx,0px),var(--ly,0px)) scale(1.15)}75%{transform:translate(calc(var(--lx,0px)*.12),calc(var(--ly,0px)*.12)) scale(1.04)}100%{transform:translate(0,0) scale(1)}}
 @keyframes deathBurst{0%{transform:scale(1);opacity:1;filter:none}28%{transform:scale(1.6) rotate(10deg);opacity:.95;filter:brightness(3.5)}65%{transform:scale(.4) rotate(25deg);opacity:.4;filter:brightness(1.5)}100%{transform:scale(0) rotate(30deg);opacity:0}}
 @keyframes minionIn{0%{transform:scale(0) translateY(-32px) rotate(-8deg);opacity:0}60%{transform:scale(1.12) translateY(3px);opacity:1}85%{transform:scale(.97) translateY(-1px)}100%{transform:scale(1) translateY(0);opacity:1}}
 @keyframes dmgFloat{0%{transform:translateY(0) scale(1.2);opacity:1}55%{opacity:.85}100%{transform:translateY(-70px) scale(.7);opacity:0}}
 @keyframes toastIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.88)}10%{opacity:1;transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(.95)}}
 @keyframes slotIn{0%{width:0;opacity:0}100%{width:68px;opacity:1}}
-@keyframes endPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 22px rgba(40,130,255,.68),0 0 8px rgba(40,130,255,.35)}}
+@keyframes endPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 28px rgba(160,60,255,.85),0 0 12px rgba(180,80,255,.5),0 0 4px rgba(220,140,255,.3)}}
 @keyframes rdyPulse{0%,100%{opacity:.78}50%{opacity:1}}
 @keyframes marchDash{0%{stroke-dashoffset:24}100%{stroke-dashoffset:0}}
 /* Marching arrow on SVG path */
@@ -98,9 +99,10 @@ button{font-family:Georgia,serif;cursor:pointer}
 .hp-bar-row{flex-shrink:0;height:40px;display:flex;align-items:center;gap:10px;padding:0 12px;position:relative}
 .hp-bar-row.top{background:#0a0a0a;border-bottom:1px solid #1a1a1a}
 .hp-bar-row.bot{background:#0a0a0a;border-top:1px solid #1a1a1a;border-bottom:3px solid #050505}
-.hp-bar-track{flex:1;height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;position:relative}
-.hp-bar-fill{height:100%;border-radius:5px;transition:width .55s cubic-bezier(.25,.8,.25,1)}
+.hp-bar-track{flex:1;height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;position:relative;border:1.5px solid #000;box-shadow:0 1px 4px rgba(0,0,0,.7) inset}
+.hp-bar-fill{height:100%;border-radius:3px;transition:width .55s cubic-bezier(.25,.8,.25,1)}
 .hp-bar-fill.hit{animation:hpFlash .5s ease-out}
+.hp-bar-row.shake{animation:hpShake .45s ease-out}
 .ai-hand-wrap{flex-shrink:0;height:108px;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;background:#090909;border-bottom:1px solid #1a1a1a;overflow:visible}
 .boards{flex:1;display:flex;flex-direction:column;min-height:0;background:#0c0c0c;position:relative;overflow:visible;z-index:1}
 .brow{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 8px;min-height:64px;overflow:visible;position:relative}
@@ -374,7 +376,14 @@ function floatDmg(x,y,dmg,heal=false){
     const ph=document.getElementById("ph"),ah=document.getElementById("ah");
     if(ph){const r=ph.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push(ph.closest(".hp-bar-row"));}
     if(ah){const r=ah.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push(ah.closest(".hp-bar-row"));}
-    barsToFlash.forEach(row=>{if(!row)return;const fill=row.querySelector(".hp-bar-fill");if(fill){fill.classList.remove("hit");void fill.offsetWidth;fill.classList.add("hit");setTimeout(()=>fill.classList.remove("hit"),520);}});
+    barsToFlash.forEach(row=>{
+      if(!row)return;
+      const fill=row.querySelector(".hp-bar-fill");
+      if(fill){fill.classList.remove("hit");void fill.offsetWidth;fill.classList.add("hit");setTimeout(()=>fill.classList.remove("hit"),520);}
+      // Fix 6: shake the whole bar row for impact feel
+      row.classList.remove("shake");void row.offsetWidth;row.classList.add("shake");
+      setTimeout(()=>row.classList.remove("shake"),460);
+    });
   }
 }
 
@@ -492,12 +501,12 @@ function hMana(cur,max){
     if(!ex){
       g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="none" stroke="#1e1e1e" stroke-width="1.2"/></svg>`;
     }else if(on){
-      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#72b4ff"/><stop offset="55%" stop-color="#1c72e8"/><stop offset="100%" stop-color="#0a3d8a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#2055bb" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.2)"/></svg>`;
+      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b57bff"/><stop offset="55%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#3d1a7a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#5b21b6" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.2)"/></svg>`;
     }else{
       g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="#131a24" stroke="#1e2a3a" stroke-width=".8"/></svg>`;
     }
   }
-  return`<div style="display:flex;gap:3px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#5599dd;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
+  return`<div style="display:flex;gap:3px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#a855f7;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
 }
 
 // ── HTML HELPERS ──────────────────────
@@ -510,7 +519,7 @@ const hCard=(c,sel,faded,sm,glow)=>{
   const bg=isM?"#f4f0e8":SPELL_BG;
   const typeTag=`<div style="position:absolute;top:${sm?28:37}px;left:0;right:0;text-align:center;font-size:${sm?5:6}px;color:${isM?"#9a7020":"#aa4060"};font-family:monospace;letter-spacing:.5px;pointer-events:none">${isM?"— 隨從 —":"— 法術 —"}</div>`;
   return`<div class="card${sm?" sm":""}${sel?" sel":""}${faded?" faded":""}${glow?" playable":""}" style="background:${bg}">
-  ${svgHex(c.cost,"#3c96cc",hw,hh,hfs)}
+  ${svgHex(c.cost,"#7c3aed",hw,hh,hfs)}
   <div class="cname">${c.name}</div>${typeTag}
   <div class="csym">${c.sym}</div>
   ${isM?svgTri(c.atk,"#d86018",tw,th,tfs)+svgDrop(c.hp,"#c22828","#ffe8e8",dw,th,dfs):`<div class="cdesc">${c.desc||""}</div>`}
@@ -519,7 +528,7 @@ const hBack=()=>`<div class="cardback"><div style="width:56px;height:82px;border
 // Fix 1: field minion — consistent "— 隨從 —" label below name, symbol pushed down to avoid overlap
 const hMinion=(m,sel,glow,ns)=>{const can=!m.sick&&!m.attacked,lo=m.curHp/m.hp<0.35;
   return`<div class="minion${sel?" atk-sel":""}${glow?" glow":""}${can&&!sel?" can":""}${m.sick?" sick":""}${ns?" new-summon":""}">
-  ${svgHex(m.cost,"#3c96cc",13,14,7)}
+  ${svgHex(m.cost,"#7c3aed",13,14,7)}
   <div class="mn">${m.name}</div>
   <div style="position:absolute;top:22px;left:0;right:0;text-align:center;font-size:5px;color:#9a7820;letter-spacing:.3px;font-family:monospace;pointer-events:none">— 隨從 —</div>
   <div class="ms">${m.sym}</div>
@@ -543,12 +552,12 @@ function hMana(cur,max){
     if(!ex){
       g+=`<svg width="13" height="13" viewBox="0 0 13 13"><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="none" stroke="#161616" stroke-width="1"/></svg>`;
     }else if(on){
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><defs><linearGradient id="mg${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6aacff"/><stop offset="45%" stop-color="#1c72e8"/><stop offset="100%" stop-color="#0a3d8a"/></linearGradient></defs><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="url(#mg${i})" stroke="#2255bb" stroke-width=".8"/><polygon points="6.5,1 12,6.5 6.5,5.5" fill="rgba(255,255,255,.22)"/><line x1="1" y1="6.5" x2="6.5" y2="12" stroke="rgba(0,0,0,.18)" stroke-width=".8"/></svg>`;
+      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><defs><linearGradient id="mg${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6aacff"/><stop offset="45%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#3d1a7a"/></linearGradient></defs><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="url(#mg${i})" stroke="#2255bb" stroke-width=".8"/><polygon points="6.5,1 12,6.5 6.5,5.5" fill="rgba(255,255,255,.22)"/><line x1="1" y1="6.5" x2="6.5" y2="12" stroke="rgba(0,0,0,.18)" stroke-width=".8"/></svg>`;
     }else{
       g+=`<svg width="13" height="13" viewBox="0 0 13 13"><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="#111820" stroke="#1e2a3a" stroke-width=".8"/></svg>`;
     }
   }
-  return`<div style="display:flex;gap:2px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#4488cc;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
+  return`<div style="display:flex;gap:2px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#a855f7;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
 }
 const hFan=(hand,selIdx,mana,lastDraws)=>{
   if(!hand.length)return`<div style="height:110px;display:flex;align-items:center;justify-content:center;color:#333;font-size:12px">手牌為空</div>`;
@@ -572,11 +581,11 @@ function hCardZoom(c){
   const typeTag=`<div style="position:absolute;top:37px;left:0;right:0;text-align:center;font-size:6px;color:${isM?"#9a7020":"#aa4060"};font-family:monospace;letter-spacing:.5px;pointer-events:none">${isM?"— 隨從 —":"— 法術 —"}</div>`;
   // Badge labels — visible at 2.6x zoom scale
   // 魔力: right of hex (hex is top:2px left:2px size 20x22, center y≈13px → label top:8px)
-  const manaLbl=`<div style="position:absolute;top:26px;left:2px;width:20px;text-align:center;font-size:4.5px;color:#5599cc;font-family:monospace;letter-spacing:.3px;white-space:nowrap">魔力</div>`;
+  const manaLbl=`<div style="position:absolute;top:26px;left:2px;width:20px;text-align:center;font-size:4.5px;color:#a855f7;font-family:monospace;letter-spacing:.3px;white-space:nowrap">魔力</div>`;
   const atkLbl=isM?`<div style="position:absolute;bottom:24px;left:0;width:22px;text-align:center;font-size:4.5px;color:#d87030;font-family:monospace;letter-spacing:.3px">攻擊</div>`:"";
   const hpLbl=isM?`<div style="position:absolute;bottom:24px;right:0;width:22px;text-align:center;font-size:4.5px;color:#c03030;font-family:monospace;letter-spacing:.3px">血量</div>`:"";
   return`<div class="card" style="background:${bg}">
-  ${svgHex(c.cost,"#3c96cc",20,22,10)}
+  ${svgHex(c.cost,"#7c3aed",20,22,10)}
   ${manaLbl}
   <div class="cname">${c.name}</div>${typeTag}
   <div class="csym">${c.sym}</div>
@@ -659,7 +668,7 @@ function buildDeck(){
     const sh=`${w*.38},${h*.58} ${w*.62},${h*.58} ${w},${h*.73} ${w/2},${h} 0,${h*.73}`;
     const fs=Math.round(sz*.48);
     const lbl=v==="8+"?"8+":String(v);
-    return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible;display:block"><polygon points="${pts}" fill="#3c96cc"/><polygon points="${hi}" fill="rgba(255,255,255,.26)"/><polygon points="${sh}" fill="rgba(0,0,0,.2)"/><polygon points="${pts}" fill="none" stroke="rgba(255,255,255,.15)" stroke-width=".7"/><text x="${w/2}" y="${h*.5}" dominant-baseline="central" text-anchor="middle" fill="#e8f4ff" font-size="${fs}" font-family="monospace" font-weight="bold">${lbl}</text></svg>`;
+    return`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible;display:block"><polygon points="${pts}" fill="#7c3aed"/><polygon points="${hi}" fill="rgba(255,255,255,.26)"/><polygon points="${sh}" fill="rgba(0,0,0,.2)"/><polygon points="${pts}" fill="none" stroke="rgba(255,255,255,.15)" stroke-width=".7"/><text x="${w/2}" y="${h*.5}" dominant-baseline="central" text-anchor="middle" fill="#e8f4ff" font-size="${fs}" font-family="monospace" font-weight="bold">${lbl}</text></svg>`;
   };
 
   const costBuckets=Array(9).fill(0);
@@ -1150,9 +1159,19 @@ function updateProxArrow(fx,fy){
   document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
   // Use the full hp-bar-row as hero target (much larger hit area than just #ah icon)
   const hpTop=document.querySelector(".hp-bar-row.top");
-  if(hpTop){const r=hpTop.getBoundingClientRect();ts.push({el:hpTop,x:r.left+r.width/2,y:r.top+r.height/2});}
+  if(hpTop){
+    const r=hpTop.getBoundingClientRect();
+    // Fix 1: use full row — center x, but snap y to row center so proximity works for full row height
+    ts.push({el:hpTop,x:r.left+r.width/2,y:r.top+r.height/2,yMin:r.top-20,yMax:r.bottom+20});
+  }
   document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));
-  ts.forEach(t=>{t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);});
+  ts.forEach(t=>{
+    // Fix 1: for hp-bar-row, clamp y to row range so any y within row height = 0 vertical dist
+    const clampedY=t.yMin!=null?Math.max(t.yMin,Math.min(t.yMax,fy)):fy;
+    t.dist=Math.sqrt((t.x-fx)**2+(clampedY-t.y)**2+(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax?-30:0)**2);
+    // Simpler: if finger y is within row range, only measure horizontal distance
+    if(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax) t.dist=Math.abs(t.x-fx)*0.5;
+  });
   const best=ts.filter(t=>t.dist<PROX).sort((a,b)=>a.dist-b.dist)[0];
   if(!best){hideArrow();return;}
   if(!arrowEl){arrowEl=document.createElement("div");arrowEl.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:997";document.body.appendChild(arrowEl);}
@@ -1175,10 +1194,15 @@ function updateProxArrow(fx,fy){
         <stop offset="0%" stop-color="${colFade}"/>
         <stop offset="100%" stop-color="${col}"/>
       </linearGradient>
+      <marker id="arh-bg" markerWidth="5" markerHeight="4" refX="4.5" refY="2" orient="auto">
+        <polygon points="0 0,5 2,0 4" fill="rgba(0,0,0,.85)"/>
+      </marker>
       <marker id="arh" markerWidth="5" markerHeight="4" refX="4.5" refY="2" orient="auto">
         <polygon points="0 0,5 2,0 4" fill="${col}"/>
       </marker>
     </defs>
+    <path d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
+      stroke="rgba(0,0,0,.7)" stroke-width="10" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
     <path class="arrow-march" d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
       stroke="url(#${gid})" stroke-width="6" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
     ${rdy?`<circle cx="${tx}" cy="${ty}" r="24" fill="rgba(255,148,38,.1)" stroke="${col}" stroke-width="1.6"/>`:""}
@@ -1195,9 +1219,14 @@ function closestTarget(fx,fy){
   const ts=[];
   document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
   const hpTop=document.querySelector(".hp-bar-row.top");
-  if(hpTop){const r=hpTop.getBoundingClientRect();ts.push({el:hpTop,x:r.left+r.width/2,y:r.top+r.height/2});}
+  if(hpTop){const r=hpTop.getBoundingClientRect();ts.push({el:hpTop,x:r.left+r.width/2,y:r.top+r.height/2,yMin:r.top-20,yMax:r.bottom+20});}
   let best=null,md=Infinity;
-  ts.forEach(t=>{const d=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);if(d<md){md=d;best={...t,dist:d};}});
+  ts.forEach(t=>{
+    let d;
+    if(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax) d=Math.abs(t.x-fx)*0.5;
+    else d=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);
+    if(d<md){md=d;best={...t,dist:d};}
+  });
   return best;
 }
 function handDrop(ci,ins,el){if(!GAME||GAME.turn!=="player")return;const card=GAME.player.hand[ci];if(!card||card.cost>GAME.player.mana)return;if(card.type==="minion"){if(el.closest("#pb")||el.closest(".board-slot-ghost"))act({t:"HC_AT",i:ci,slot:ins!=null?ins:GAME.player.board.length});}else if(card.effect==="heal"||card.effect==="draw"){act({t:"HC",i:ci});}else{const em=el.closest(".em"),ah=el.closest("#ah");if(em){GAME={...GAME,selCard:ci,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});}else if(ah){GAME={...GAME,selCard:ci,mode:"targeting"};act({t:"EH"});}}}
