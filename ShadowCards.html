@@ -1191,7 +1191,7 @@ function updateSlots(ins){
 }
 
 // ── PROXIMITY ARROW ───────────────────
-const PROX=90,READY=78;
+const PROX=160,READY=78;
 function updateProxArrow(fx,fy){
   const ts=[];
   if(drag.type==="hand"){const card=GAME&&GAME.player.hand[drag.cardIdx];if(!card||card.type==="minion")return;}
@@ -1234,17 +1234,17 @@ function updateProxArrow(fx,fy){
         <stop offset="0%" stop-color="${colFade}"/>
         <stop offset="100%" stop-color="${col}"/>
       </linearGradient>
-      <marker id="arh-bg" markerWidth="5" markerHeight="4" refX="4.5" refY="2" orient="auto">
-        <polygon points="0 0,5 2,0 4" fill="rgba(0,0,0,.85)"/>
+      <marker id="arh-bg" markerWidth="3.5" markerHeight="3" refX="3.2" refY="1.5" orient="auto">
+        <polygon points="0 0,3.5 1.5,0 3" fill="rgba(0,0,0,.85)"/>
       </marker>
-      <marker id="arh" markerWidth="5" markerHeight="4" refX="4.5" refY="2" orient="auto">
-        <polygon points="0 0,5 2,0 4" fill="${col}"/>
+      <marker id="arh" markerWidth="3.5" markerHeight="3" refX="3.2" refY="1.5" orient="auto">
+        <polygon points="0 0,3.5 1.5,0 3" fill="${col}"/>
       </marker>
     </defs>
     <path d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
-      stroke="rgba(0,0,0,.75)" stroke-width="7.5" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
+      stroke="rgba(0,0,0,.75)" stroke-width="5.5" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
     <path class="arrow-march" d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
-      stroke="url(#${gid})" stroke-width="6" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
+      stroke="url(#${gid})" stroke-width="3.5" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
     ${rdy?`<circle cx="${tx}" cy="${ty}" r="24" fill="rgba(255,148,38,.1)" stroke="${col}" stroke-width="1.6"/>`:""}
   </svg>`;
 }
