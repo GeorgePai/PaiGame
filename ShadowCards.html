@@ -32,7 +32,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .minion.glow{border:2px dashed #c83030!important;box-shadow:0 0 10px rgba(200,50,50,.4)!important}
 .minion.sick{opacity:.62}
 .minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:500!important;isolation:isolate;position:relative}
-.minion.dying{animation:deathBurst .9s linear forwards!important;pointer-events:none}
+.minion.dying{animation:deathBurst 1.8s linear forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 .minion .mn{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:7px;font-weight:bold;color:#111;padding:0 3px;line-height:1.1}
 .minion.atk-sel .mn,.minion.atk-sel .ms{color:#aaa}
@@ -52,16 +52,21 @@ button{font-family:Georgia,serif;cursor:pointer}
 @keyframes hpShake{0%,100%{transform:translateX(0)}18%{transform:translateX(-5px)}36%{transform:translateX(5px)}54%{transform:translateX(-4px)}72%{transform:translateX(3px)}88%{transform:translateX(-2px)}}
 @keyframes lunge{0%{transform:translate(0,0) scale(1)}40%{transform:translate(var(--lx,0px),var(--ly,0px)) scale(1.15)}75%{transform:translate(calc(var(--lx,0px)*.12),calc(var(--ly,0px)*.12)) scale(1.04)}100%{transform:translate(0,0) scale(1)}}
 @keyframes deathBurst{
-  0%  {transform:translateX(0) rotate(0deg);opacity:1;filter:none}
-  8%  {transform:translateX(-12px) rotate(-4deg);opacity:1}
-  16% {transform:translateX(13px) rotate(4deg);opacity:1}
-  24% {transform:translateX(-11px) rotate(-3deg);opacity:.95}
-  32% {transform:translateX(11px) rotate(3deg);opacity:.9}
-  42% {transform:translateX(-8px) rotate(-2deg);opacity:.75}
-  52% {transform:translateX(7px) rotate(2deg);opacity:.6}
-  62% {transform:translateX(-4px) rotate(-1deg);opacity:.4;filter:brightness(1.5) saturate(.5)}
-  76% {transform:translateX(2px);opacity:.2;filter:brightness(1.8) saturate(.2)}
-  100%{transform:translateX(0);opacity:0;filter:brightness(2) saturate(0)}
+  0%  {transform:translateX(0);opacity:1;filter:none}
+  10% {transform:translateX(-7px);opacity:1}
+  20% {transform:translateX(7px);opacity:1}
+  28% {transform:translateX(-6px);opacity:1}
+  35% {transform:translateX(6px);opacity:1}
+  41% {transform:translateX(-4px);opacity:1}
+  46% {transform:translateX(4px);opacity:1}
+  50% {transform:translateX(-3px);opacity:1}
+  53% {transform:translateX(3px);opacity:1}
+  55% {transform:translateX(-2px);opacity:1}
+  57% {transform:translateX(2px);opacity:1}
+  59% {transform:translateX(0);opacity:.95;filter:brightness(1.3) saturate(.8)}
+  70% {opacity:.65;filter:brightness(1.6) saturate(.5)}
+  83% {opacity:.3;filter:brightness(1.8) saturate(.2)}
+  100%{opacity:0;filter:brightness(2) saturate(0)}
 }
 @keyframes minionIn{0%{transform:scale(0) translateY(-32px) rotate(-8deg);opacity:0}60%{transform:scale(1.12) translateY(3px);opacity:1}85%{transform:scale(.97) translateY(-1px)}100%{transform:scale(1) translateY(0);opacity:1}}
 @keyframes dmgFloat{0%{transform:translateY(0) scale(1.2);opacity:1}55%{opacity:.85}100%{transform:translateY(-70px) scale(.7);opacity:0}}
@@ -77,7 +82,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 /* flyIn with staggered delay --dd for sequential draw animation */
 .card-fw.new-card{animation:flyIn .95s cubic-bezier(.15,1.1,.5,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:var(--dd,0s),calc(var(--dd,0s) + .95s)}
 .minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:500!important;isolation:isolate;position:relative}
-.minion.dying{animation:deathBurst .9s linear forwards!important;pointer-events:none}
+.minion.dying{animation:deathBurst 1.8s linear forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 /* Draw: existing cards slide smoothly when hand size changes */
 .hs{position:absolute;bottom:0;cursor:grab;user-select:none;-webkit-user-select:none;transition:left .28s cubic-bezier(.3,1,.5,1),transform .15s}
@@ -349,17 +354,16 @@ function executeAiScript(script,idx,onDone){
       const atkDies=!step.sa.ai.board.find(m=>m.uid===step.atkrUid);
       const defDies=step.ti!==-1&&!step.sa.player.board.find(m=>m.uid===step.defUid);
       lungeAtk(atkEl,defEl,()=>{
-        // Impact: show damage numbers, then apply dying class AFTER damage shown
         if(defEl){const r=defEl.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,step.atkDmg);}
         if(atkEl&&step.defDmg>0){const r=atkEl.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,step.defDmg);}
-        // Delay dying animation slightly so damage float is visible first
         setTimeout(()=>{
-          if(atkDies&&atkEl)atkEl.classList.add("dying");
-          if(defDies&&defEl)defEl.classList.add("dying");
+          if(atkDies&&atkEl)playDeathAnim(atkEl);
+          if(defDies&&defEl)playDeathAnim(defEl);
         },120);
       },()=>{
-        GAME=step.sa;render();
-        setTimeout(next,500); // Fix 9: longer pause after attack
+        // Wait for death animation to finish before re-rendering board positions
+        const anyDies=atkDies||defDies;
+        setTimeout(()=>{GAME=step.sa;render();setTimeout(next,500);}, anyDies?1800:0);
       });
     },80);
   }
@@ -451,6 +455,41 @@ function animDrawCards(count,who,delay=0){
     },delay+i*280);
   }
 }
+// Play death animation on a body-fixed clone so render() doesn't kill it mid-animation
+function playDeathAnim(el){
+  if(!el)return;
+  const r=el.getBoundingClientRect();
+  const clone=el.cloneNode(true);
+  clone.style.cssText=`position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:none;z-index:8000;animation:deathBurst 1.8s linear forwards`;
+  // Remove any existing animation from children
+  clone.querySelectorAll('*').forEach(c=>c.style.animation='none');
+  document.body.appendChild(clone);
+  setTimeout(()=>clone.remove(), 1900);
+}
+
+// Detect minions killed by spell and trigger death animations before render
+// Returns true if any deaths occurred (caller should delay render by 1800ms)
+function spellDeathAnims(prevState, nextState){
+  let anyDied=false;
+  if(prevState.ai&&nextState.ai){
+    prevState.ai.board.forEach((m,i)=>{
+      if(!nextState.ai.board.find(n=>n.uid===m.uid)){
+        const el=document.querySelector(`.em[data-ei="${i}"] .minion`)||document.querySelector(`.em[data-ei="${i}"]`);
+        if(el){playDeathAnim(el);anyDied=true;}
+      }
+    });
+  }
+  if(prevState.player&&nextState.player){
+    prevState.player.board.forEach((m,i)=>{
+      if(!nextState.player.board.find(n=>n.uid===m.uid)){
+        const el=document.querySelector(`.om[data-oi="${i}"] .minion`)||document.querySelector(`.om[data-oi="${i}"]`);
+        if(el){playDeathAnim(el);anyDied=true;}
+      }
+    });
+  }
+  return anyDied;
+}
+
 function lungeAtk(atkEl,defEl,onImpact,onDone){
   if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}
   const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();
@@ -1241,8 +1280,12 @@ function doPlayerAtk(bi,tw,ti){
   lungeAtk(atkEl,defEl,()=>{
     if(defEl){const r=defEl.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,defDmg);}
     if(atkEl&&atkDmg>0){const r=atkEl.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,atkDmg);}
-    if(defDies&&defEl)defEl.classList.add("dying");if(atkDies&&atkEl)atkEl.classList.add("dying");
-  },()=>{animLock=false;GAME=ns;render();});
+    if(defDies&&defEl)playDeathAnim(defEl);if(atkDies&&atkEl)playDeathAnim(atkEl);
+  },()=>{
+    animLock=false;
+    const anyDies=defDies||atkDies;
+    setTimeout(()=>{GAME=ns;render();}, anyDies?1800:0);
+  });
 }
 
 // ── DISPATCH ──────────────────────────
@@ -1255,7 +1298,10 @@ function act(a){
       if(card&&card.effect==="dmg"){
         setTimeout(()=>{document.querySelectorAll(".em .minion,#ah").forEach(el=>{if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val);}});},60);
       }
-      GAME={...castS(g,g.selCard,"player","ai",-2),selCard:null,selAtk:null,mode:"default"};
+      const ns2={...castS(g,g.selCard,"player","ai",-2),selCard:null,selAtk:null,mode:"default"};
+      const died2=spellDeathAnims(g,ns2);
+      GAME=ns2;
+      if(died2)setTimeout(()=>render(),1800);else render();
     }
   }else if(a.t==="HC"){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}
@@ -1284,8 +1330,9 @@ function act(a){
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
       const ns={...castS(g,g.selCard,"player","ai",a.i),selCard:null,selAtk:null,mode:"default"};
+      const died=spellDeathAnims(g,ns);
       if(card){const t=document.querySelector(`.em[data-ei="${a.i}"] .minion`)||document.querySelector(`.em[data-ei="${a.i}"]`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}}
-      GAME=ns;
+      GAME=ns;if(died)setTimeout(()=>render(),1800);
     }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",a.i);return;}
   }else if(a.t==="EH"){
     if(g.mode==="targeting"&&g.selCard!=null){
@@ -1295,7 +1342,6 @@ function act(a){
       GAME=ns;
     }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",-1);return;}
   }else if(a.t==="PH"){
-    // Own hero as spell target (heal self or dmg self)
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
       const isHeal=card&&card.effect==="heal";
@@ -1304,12 +1350,12 @@ function act(a){
       GAME=ns;
     }
   }else if(a.t==="PM"){
-    // Own minion as spell target (heal own minion)
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
       const ns={...castS(g,g.selCard,"player","player",a.i),selCard:null,selAtk:null,mode:"default"};
+      const died=spellDeathAnims(g,ns);
       if(card){const t=document.querySelector(`.om[data-oi="${a.i}"] .minion`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,true);}}
-      GAME=ns;
+      GAME=ns;if(died)setTimeout(()=>render(),1800);
     }
   }else if(a.t==="HC_AT"){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}if(c.type!=="minion")return;if(g.player.board.length>=7){toast("戰場已滿！","err");return;}
