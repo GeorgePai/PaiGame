@@ -503,7 +503,7 @@ function hMana(cur,max){
     }else if(on){
       g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block;filter:drop-shadow(0 0 3px rgba(168,85,247,.7))"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b57bff"/><stop offset="55%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#3d1a7a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="rgba(200,140,255,.5)" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.2)"/></svg>`;
     }else{
-      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="#131a24" stroke="#1e2a3a" stroke-width=".8"/></svg>`;
+      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="#1a0d2e" stroke="#5b2d8a" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(180,120,255,.06)"/></svg>`;
     }
   }
   return`<div style="display:flex;gap:3px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#a855f7;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
@@ -879,8 +879,8 @@ function showBattle(){
     <div class="topbar">
       <div style="font-size:10px;color:#c0c0b0;letter-spacing:1px">對手本回合魔力</div>
       ${hMana(ai.mana,ai.maxMana)}
-      <span style="font-size:10px;color:#aaa;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
-      <span style="font-size:10px;color:#888;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
+      <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
+      <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
       ${turn==="ai"&&!over?`<span style="margin-left:auto;font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">對手思考中...</span>`:""}
     </div>
     <div class="ai-hand-wrap">${hAIFan(ai.hand.length,aiNewCard)}</div>
@@ -903,8 +903,8 @@ function showBattle(){
     <div class="botbar">
       <div style="font-size:10px;color:#c0c0b0;letter-spacing:1px">本回合魔力</div>
       ${hMana(pl.mana,pl.maxMana)}
-      <span style="font-size:10px;color:#aaa;font-family:monospace;margin-left:6px">手牌 ${pl.hand.length}/10</span>
-      <span style="font-size:10px;color:#888;font-family:monospace;margin-left:4px">牌庫剩餘 ${pl.deck.length}</span>
+      <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:6px">手牌 ${pl.hand.length}/10</span>
+      <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:4px">牌庫剩餘 ${pl.deck.length}</span>
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
         ${canTgt&&isP?`<button id="bcn" style="padding:7px 12px;background:none;border:1px solid #333;color:#888;font-size:11px">取消</button>`:""}
         <button id="bet" style="padding:9px 20px;background:${isP?"#ede9dc":"#111"};color:${isP?"#000":"#444"};border:none;font-size:12px;letter-spacing:3px" class="${canEnd?"end-hint":""}">結束回合</button>
@@ -1132,7 +1132,7 @@ function getSlot(cx){
 }
 function updateSlots(ins){
   const pb=document.getElementById("pb");if(!pb||!GAME)return;const pl=GAME.player;let h="";
-  if(!pl.board.length){h=ins!=null?`<div class="board-slot-ghost"></div>`:`<div style="color:#181818;font-size:10px;letter-spacing:3px">YOUR FIELD</div>`;}
+  if(!pl.board.length){h=ins!=null?`<div class="board-slot-ghost"></div>`:`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 我方戰場 —</div>`;}
   else{for(let i=0;i<=pl.board.length;i++){if(ins===i)h+=`<div class="board-slot-ghost"></div>`;if(i<pl.board.length){const m=pl.board[i];h+=`<div class="om" data-oi="${i}">${hMinion(m,GAME.selAtk===i,false,m.uid===newSummonUid)}</div>`;}}}
   pb.innerHTML=h;
 }
