@@ -31,7 +31,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .minion.atk-sel{background:#1a1a1a;border:2px solid #ffd700!important;box-shadow:0 0 16px rgba(255,215,0,.65)!important;animation:none!important}
 .minion.glow{border:2px dashed #c83030!important;box-shadow:0 0 10px rgba(200,50,50,.4)!important}
 .minion.sick{opacity:.62}
-.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:50}
+.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:200!important;isolation:isolate}
 .minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 .minion .mn{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:7px;font-weight:bold;color:#111;padding:0 3px;line-height:1.1}
@@ -47,7 +47,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 /* ── ANIMATIONS ── */
 @keyframes pBlue{0%,100%{box-shadow:0 0 8px rgba(20,100,210,.22),0 2px 6px rgba(0,0,0,.4)}50%{box-shadow:0 0 18px rgba(20,100,210,.6),0 2px 6px rgba(0,0,0,.4)}}
 @keyframes floatCard{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-@keyframes flyIn{0%{transform:translateX(280px) scale(.15) rotate(18deg);opacity:0}55%{transform:translateX(-8px) scale(1.08) rotate(-1.5deg);opacity:1}100%{transform:translateX(0) scale(1) rotate(0);opacity:1}}
+@keyframes flyIn{0%{transform:translateX(320px) scale(.12) rotate(20deg);opacity:0}60%{transform:translateX(-6px) scale(1.06) rotate(-1deg);opacity:1}100%{transform:translateX(0) scale(1) rotate(0);opacity:1}}
+@keyframes hpFlash{0%{filter:brightness(1)}30%{filter:brightness(2.5) saturate(1.4)}100%{filter:brightness(1)}}
 @keyframes lunge{0%{transform:translate(0,0) scale(1)}40%{transform:translate(var(--lx,0px),var(--ly,0px)) scale(1.15)}75%{transform:translate(calc(var(--lx,0px)*.12),calc(var(--ly,0px)*.12)) scale(1.04)}100%{transform:translate(0,0) scale(1)}}
 @keyframes deathBurst{0%{transform:scale(1);opacity:1;filter:none}28%{transform:scale(1.6) rotate(10deg);opacity:.95;filter:brightness(3.5)}65%{transform:scale(.4) rotate(25deg);opacity:.4;filter:brightness(1.5)}100%{transform:scale(0) rotate(30deg);opacity:0}}
 @keyframes minionIn{0%{transform:scale(0) translateY(-32px) rotate(-8deg);opacity:0}60%{transform:scale(1.12) translateY(3px);opacity:1}85%{transform:scale(.97) translateY(-1px)}100%{transform:scale(1) translateY(0);opacity:1}}
@@ -62,8 +63,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 
 .card-fw{animation:floatCard 2.2s ease-in-out infinite;animation-delay:var(--fd,0s)}
 /* flyIn with staggered delay --dd for sequential draw animation */
-.card-fw.new-card{animation:flyIn .72s cubic-bezier(.2,1.2,.6,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:var(--dd,0s),calc(var(--dd,0s) + .72s)}
-.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:50}
+.card-fw.new-card{animation:flyIn .95s cubic-bezier(.15,1.1,.5,1) forwards, floatCard 2.2s ease-in-out infinite;animation-delay:var(--dd,0s),calc(var(--dd,0s) + .95s)}
+.minion.lunging{animation:lunge .62s cubic-bezier(.25,0,.6,1) forwards!important;z-index:200!important;isolation:isolate}
 .minion.dying{animation:deathBurst .68s ease-out forwards!important;pointer-events:none}
 .minion.new-summon{animation:minionIn .58s cubic-bezier(.15,1.35,.6,1) both}
 .hs{position:absolute;bottom:0;cursor:grab;user-select:none;-webkit-user-select:none}
@@ -76,7 +77,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 .board-slot-ghost{width:68px;height:88px;border:2px dashed rgba(50,140,255,.38);border-radius:6px;flex-shrink:0;background:rgba(50,130,255,.06);animation:slotIn .18s ease-out}
 
 /* ── DROP HI (enemy minions + hero) ── */
-.em.drop-hi .minion{outline:2px solid rgba(80,140,255,.45);outline-offset:2px;box-shadow:0 0 8px rgba(80,140,255,.28)!important}
+.em,.om{position:relative}
+.em.lunging-parent,.om.lunging-parent{z-index:200;isolation:isolate}
 /* READY: orange glow – same treatment for minion and hero */
 .em.drop-ready .minion{
   border:2px solid rgba(255,148,42,.95)!important;
@@ -94,10 +96,11 @@ button{font-family:Georgia,serif;cursor:pointer}
 .hp-bar-row.top{background:#0a0a0a;border-bottom:1px solid #1a1a1a}
 .hp-bar-row.bot{background:#0a0a0a;border-top:1px solid #1a1a1a;border-bottom:3px solid #050505}
 .hp-bar-track{flex:1;height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;position:relative}
-.hp-bar-fill{height:100%;border-radius:5px;transition:width .4s ease}
+.hp-bar-fill{height:100%;border-radius:5px;transition:width .55s cubic-bezier(.25,.8,.25,1)}
+.hp-bar-fill.hit{animation:hpFlash .5s ease-out}
 .ai-hand-wrap{flex-shrink:0;height:108px;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;background:#090909;border-bottom:1px solid #1a1a1a;overflow:visible}
-.boards{flex:1;display:flex;flex-direction:column;min-height:0;background:#0c0c0c;position:relative}
-.brow{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 8px;min-height:64px}
+.boards{flex:1;display:flex;flex-direction:column;min-height:0;background:#0c0c0c;position:relative;overflow:visible}
+.brow{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 8px;min-height:64px;overflow:visible}
 .center-div{height:1px;background:#181818;flex-shrink:0}
 .hand-wrap{flex-shrink:0;height:114px;background:#090909;border-top:1px solid #1a1a1a;overflow:visible;display:flex;justify-content:center;align-items:flex-end;padding-bottom:2px}
 /* Hint BELOW hand-wrap, as separate bar (not inside) */
@@ -355,7 +358,20 @@ const EPOCH=Date.now();
 
 // ── ANIMATION HELPERS ─────────────────
 function floatDelay(i){return(((Date.now()-EPOCH)+i*420)%2200)/1000;}
-function floatDmg(x,y,dmg,heal=false){const el=document.createElement("div");el.className="float-dmg";el.textContent=(heal?"+":"-")+dmg;el.style.cssText=`left:${x-16}px;top:${y-12}px;color:${heal?"#78e878":"#ff6855"};font-size:${dmg>=5?22:17}px`;document.body.appendChild(el);setTimeout(()=>el.remove(),980);}
+function floatDmg(x,y,dmg,heal=false){
+  const el=document.createElement("div");el.className="float-dmg";el.textContent=(heal?"+":"-")+dmg;
+  el.style.cssText=`left:${x-16}px;top:${y-12}px;color:${heal?"#78e878":"#ff6855"};font-size:${dmg>=5?22:17}px`;
+  document.body.appendChild(el);setTimeout(()=>el.remove(),980);
+  // Fix 5: flash the hp bar of the hit hero
+  if(!heal){
+    const barsToFlash=[];
+    // Find which hero bar was hit based on y position
+    const ph=document.getElementById("ph"),ah=document.getElementById("ah");
+    if(ph){const r=ph.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push(ph.closest(".hp-bar-row"));}
+    if(ah){const r=ah.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push(ah.closest(".hp-bar-row"));}
+    barsToFlash.forEach(row=>{if(!row)return;const fill=row.querySelector(".hp-bar-fill");if(fill){fill.classList.remove("hit");void fill.offsetWidth;fill.classList.add("hit");setTimeout(()=>fill.classList.remove("hit"),520);}});
+  }
+}
 
 // Fix 5: animate cards flying into hand from right side when draw spell fires
 function animDrawCards(count,who,delay=0){
@@ -377,7 +393,20 @@ function animDrawCards(count,who,delay=0){
     },delay+i*280);
   }
 }
-function lungeAtk(atkEl,defEl,onImpact,onDone){if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78,dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;atkEl.style.setProperty("--lx",dx+"px");atkEl.style.setProperty("--ly",dy+"px");atkEl.classList.add("lunging");setTimeout(()=>{atkEl.classList.remove("lunging");onImpact();setTimeout(onDone,440);},620);}
+function lungeAtk(atkEl,defEl,onImpact,onDone){
+  if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}
+  const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();
+  const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78,dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;
+  atkEl.style.setProperty("--lx",dx+"px");atkEl.style.setProperty("--ly",dy+"px");
+  // Fix 2: elevate parent container so lunging minion renders above board
+  const par=atkEl.closest(".em,.om");if(par)par.classList.add("lunging-parent");
+  atkEl.classList.add("lunging");
+  setTimeout(()=>{
+    atkEl.classList.remove("lunging");
+    if(par)par.classList.remove("lunging-parent");
+    onImpact();setTimeout(onDone,440);
+  },620);
+}
 
 // ── SVG BADGE HELPERS (3D bevel) ─────
 // Hexagon with highlight top-face and shadow bottom-face
@@ -472,7 +501,7 @@ const hFan=(hand,selIdx,mana,lastDraws)=>{
   let sl="";hand.forEach((c,i)=>{const ang=n>1?(i-(n-1)/2)*step:0,isSel=selIdx===i,cp=c.cost<=mana;
     const drawIdx=(lastDraws||[]).indexOf(c.uid);
     const isNew=drawIdx>=0;
-    const dd=isNew?`${drawIdx*550}ms`:"0s";
+    const dd=isNew?`${drawIdx*750}ms`:"0s";
     const fd=floatDelay(i).toFixed(3);
     sl+=`<div class="hs" data-hi="${i}" style="left:${i*ov}px;transform-origin:bottom center;transform:rotate(${ang}deg) translateY(${isSel?-24:0}px);z-index:${isSel?60:i};transition:transform .15s"><div class="card-fw${isNew?" new-card":""}" style="--fd:-${fd}s;--dd:${dd}">${hCard(c,isSel,false,false,cp&&!isSel)}</div></div>`;});
   return`<div style="position:relative;width:${tw}px;height:120px">${sl}</div>`;};
@@ -870,8 +899,25 @@ function onDown(e){
   e.preventDefault();const p=pt(e);
   if(hs){
     if(GAME.turn!=="player")return;
-    const idx=+hs.dataset.hi;
-    drag={active:true,type:"hand",cardIdx:idx,boardIdx:-1,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:hs,wasLP:false};
+    // Use each card's layout left offset (no rotation effect) + fan container position
+    // to find which card strip contains the touch. Reliable across all rotations.
+    const hw=document.querySelector(".hand-wrap");
+    let idx=+hs.dataset.hi; // fallback
+    if(hw){
+      const allHs=Array.from(hw.querySelectorAll(".hs"));
+      const fanContainer=allHs[0]?.parentElement;
+      if(fanContainer){
+        const fanLeft=fanContainer.getBoundingClientRect().left;
+        let bestIdx=0;
+        for(const hsEl of allHs){
+          const leftOffset=parseFloat(hsEl.style.left)||0;
+          if(p.x>=fanLeft+leftOffset) bestIdx=+hsEl.dataset.hi;
+        }
+        idx=bestIdx;
+      }
+    }
+    const srcEl=hw?hw.querySelectorAll(".hs")[idx]:hs;
+    drag={active:true,type:"hand",cardIdx:idx,boardIdx:-1,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:srcEl||hs,wasLP:false};
     lpTimer=setTimeout(()=>{lpTimer=null;if(!drag.dragging){drag.wasLP=true;showZoom(idx);}},500);
   } else if(om){
     if(GAME.turn!=="player")return;
@@ -924,7 +970,18 @@ function onMove(e){
   if(!drag.dragging)return;if(drag.ghost){drag.ghost.style.left=p.x+"px";drag.ghost.style.top=p.y+"px";}
   const card=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
   if(drag.type==="hand"&&card&&card.type==="minion"){const slot=getSlot(p.x);if(slot!==drag.insertSlot){drag.insertSlot=slot;updateSlots(slot);}}
-  else updateProxArrow(p.x,p.y);
+  else{
+    // Fix: draw spells have no target — don't show proximity arrow
+    if(!(card&&card.effect==="draw")) updateProxArrow(p.x,p.y);
+    // Fix 1: draw spell cast-ready orange ring when dragged 80px up
+    if(card&&card.effect==="draw"){
+      const vertDist=drag.startY-p.y;
+      let ri=document.getElementById("cast-ready-ring");
+      if(vertDist>=80){
+        if(!ri){ri=document.createElement("div");ri.id="cast-ready-ring";ri.style.cssText="position:fixed;bottom:118px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:990;background:rgba(255,148,30,.12);border:2px solid rgba(255,148,30,.75);border-radius:8px;padding:4px 20px;font-size:11px;color:#ffb040;font-family:monospace;letter-spacing:2px;box-shadow:0 0 22px rgba(255,148,30,.45)";ri.textContent="✦ 放開施放";document.body.appendChild(ri);}
+      }else{if(ri)ri.remove();}
+    }
+  }
 }
 function onUp(e){
   if(!drag.active)return;clearLP();
@@ -933,7 +990,10 @@ function onUp(e){
   if(srcEl)srcEl.classList.remove("src-ghost");
   if(drag.ghost){drag.ghost.remove();drag.ghost=null;}
   clearDropHi();hideArrow();updateSlots(null);hideZoom();
-  const p=pt(e,true);drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false,invalid:false};
+  document.getElementById("cast-ready-ring")?.remove();
+  const p=pt(e,true);
+  const savedStartY=drag.startY; // save before reset!
+  drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false,invalid:false};
   if(type==="hand"){
     const card=GAME&&GAME.player.hand[sc];
     if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>GAME.player.mana){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
@@ -941,23 +1001,32 @@ function onUp(e){
       if(invalid||card&&card.cost>GAME.player.mana){toast("魔力不足！","err");return;}
       if(card&&card.type==="minion"&&GAME.player.board.length>=7){toast("戰場已滿！","err");return;}
       if(card&&card.type==="minion"){
-        // Fix 2: for minions, always use the slot computed during drag (avoids left-edge miss on touch)
         const slot=ss!=null?ss:GAME.player.board.length;
         act({t:"HC_AT",i:sc,slot});return;
       }
       if(card&&card.type!=="minion"){
+        // Fix 1: draw spells use savedStartY for vertical distance check
+        const vertDist=savedStartY-p.y;
+        if(card.effect==="draw"){
+          if(vertDist<80){return;}
+          const g=GAME;
+          GAME={...castS(g,sc,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
+          render(); // Fix: must re-render so DOM reflects new hand before next interaction
+          return;
+        }
+        // Fix 3: always set selCard+mode:"targeting" before dispatch
         const cl=closestTarget(p.x,p.y);
         if(cl&&cl.dist<READY*1.4){
-          const em=cl.el.closest(".em"),isH=cl.el.id==="ah";
-          if(em){act({t:"EM",i:+em.dataset.ei});return;}
-          if(isH){act({t:"EH"});return;}
+          const em=cl.el.closest(".em"),isH=cl.el.id==="ah"||cl.el.closest(".hp-bar-row.top");
+          if(em){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});return;}
+          if(isH){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EH"});return;}
         }
-        // Also check own minions/hero as drop targets for heal/drain/dmg
+        // Fix 3: own targets for heal/drain/dmg
         const el2=document.elementFromPoint(p.x,p.y);
         if(el2){
-          const om=el2.closest(".om"),ph=el2.closest("#ph");
-          if(om&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc};act({t:"PM",i:+om.dataset.oi});return;}
-          if(ph&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc};act({t:"PH"});return;}
+          const om=el2.closest(".om"),ph=el2.closest("#ph")||el2.closest(".hp-bar-row.bot");
+          if(om&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"PM",i:+om.dataset.oi});return;}
+          if(ph&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"PH"});return;}
         }
       }
       const el=document.elementFromPoint(p.x,p.y);if(el)handDrop(sc,ss,el);
