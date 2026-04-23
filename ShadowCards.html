@@ -501,7 +501,7 @@ function hMana(cur,max){
     if(!ex){
       g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="none" stroke="#1e1e1e" stroke-width="1.2"/></svg>`;
     }else if(on){
-      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b57bff"/><stop offset="55%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#3d1a7a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="#5b21b6" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.2)"/></svg>`;
+      g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block;filter:drop-shadow(0 0 3px rgba(168,85,247,.7))"><defs><linearGradient id="mh${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b57bff"/><stop offset="55%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#3d1a7a"/></linearGradient></defs><polygon points="${hexPts}" fill="url(#mh${i})" stroke="rgba(200,140,255,.5)" stroke-width=".8"/><polygon points="${hiPts}" fill="rgba(255,255,255,.24)"/><polygon points="${shPts}" fill="rgba(0,0,0,.2)"/></svg>`;
     }else{
       g+=`<svg width="14" height="16" viewBox="${vb}" style="overflow:visible;display:block"><polygon points="${hexPts}" fill="#131a24" stroke="#1e2a3a" stroke-width=".8"/></svg>`;
     }
@@ -545,20 +545,6 @@ function hHpBar(hp,isAI,tgt,id){
   return`<div id="${id}" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:${tgt?"pointer":"default"};${tgt?"filter:drop-shadow(0 0 6px rgba(200,48,48,.7));":""}">${icon}<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0"><div style="display:flex;align-items:center;gap:5px"><div class="hp-bar-track" style="${glow}"><div class="hp-bar-fill" style="width:${pct}%;background:${barCol}"></div></div><span style="font-size:10px;color:#cc8888;font-family:monospace;font-weight:bold;min-width:20px;text-align:right">${hp}</span></div></div></div>`;
 }
 // Fix 8: 3D diamond gem mana display
-function hMana(cur,max){
-  let g="";
-  for(let i=0;i<10;i++){
-    const on=i<cur,ex=i<max;
-    if(!ex){
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="none" stroke="#161616" stroke-width="1"/></svg>`;
-    }else if(on){
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><defs><linearGradient id="mg${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6aacff"/><stop offset="45%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#3d1a7a"/></linearGradient></defs><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="url(#mg${i})" stroke="#2255bb" stroke-width=".8"/><polygon points="6.5,1 12,6.5 6.5,5.5" fill="rgba(255,255,255,.22)"/><line x1="1" y1="6.5" x2="6.5" y2="12" stroke="rgba(0,0,0,.18)" stroke-width=".8"/></svg>`;
-    }else{
-      g+=`<svg width="13" height="13" viewBox="0 0 13 13"><polygon points="6.5,1 12,6.5 6.5,12 1,6.5" fill="#111820" stroke="#1e2a3a" stroke-width=".8"/></svg>`;
-    }
-  }
-  return`<div style="display:flex;gap:2px;align-items:center">${g}<span style="margin-left:5px;font-size:11px;color:#a855f7;font-family:monospace;font-weight:bold">${cur}/${max}</span></div>`;
-}
 const hFan=(hand,selIdx,mana,lastDraws)=>{
   if(!hand.length)return`<div style="height:110px;display:flex;align-items:center;justify-content:center;color:#333;font-size:12px">手牌為空</div>`;
   const n=hand.length,ds=Math.min(n*4.5,36),step=n>1?ds/(n-1):0,cw=82,ov=n>7?18:n>5?26:36,tw=cw+(n-1)*ov;
@@ -1152,7 +1138,7 @@ function updateSlots(ins){
 }
 
 // ── PROXIMITY ARROW ───────────────────
-const PROX=140,READY=78;
+const PROX=90,READY=78;
 function updateProxArrow(fx,fy){
   const ts=[];
   if(drag.type==="hand"){const card=GAME&&GAME.player.hand[drag.cardIdx];if(!card||card.type==="minion")return;}
@@ -1166,11 +1152,12 @@ function updateProxArrow(fx,fy){
   }
   document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));
   ts.forEach(t=>{
-    // Fix 1: for hp-bar-row, clamp y to row range so any y within row height = 0 vertical dist
-    const clampedY=t.yMin!=null?Math.max(t.yMin,Math.min(t.yMax,fy)):fy;
-    t.dist=Math.sqrt((t.x-fx)**2+(clampedY-t.y)**2+(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax?-30:0)**2);
-    // Simpler: if finger y is within row range, only measure horizontal distance
-    if(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax) t.dist=Math.abs(t.x-fx)*0.5;
+    // Only simplify distance for hp-bar-row when finger is ACTUALLY within its y range
+    if(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax){
+      t.dist=Math.abs(t.x-fx)*0.5; // finger in row height → horizontal dist only
+    }else{
+      t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2); // normal euclidean
+    }
   });
   const best=ts.filter(t=>t.dist<PROX).sort((a,b)=>a.dist-b.dist)[0];
   if(!best){hideArrow();return;}
@@ -1202,7 +1189,7 @@ function updateProxArrow(fx,fy){
       </marker>
     </defs>
     <path d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
-      stroke="rgba(0,0,0,.7)" stroke-width="10" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
+      stroke="rgba(0,0,0,.75)" stroke-width="7.5" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
     <path class="arrow-march" d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
       stroke="url(#${gid})" stroke-width="6" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
     ${rdy?`<circle cx="${tx}" cy="${ty}" r="24" fill="rgba(255,148,38,.1)" stroke="${col}" stroke-width="1.6"/>`:""}
