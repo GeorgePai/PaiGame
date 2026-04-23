@@ -396,16 +396,33 @@ function animDrawCards(count,who,delay=0){
 function lungeAtk(atkEl,defEl,onImpact,onDone){
   if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}
   const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();
-  const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78,dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;
-  atkEl.style.setProperty("--lx",dx+"px");atkEl.style.setProperty("--ly",dy+"px");
-  // Fix 2: elevate parent container so lunging minion renders above board
-  const par=atkEl.closest(".em,.om");if(par)par.classList.add("lunging-parent");
-  atkEl.classList.add("lunging");
+  const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78;
+  const dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;
+
+  // Clone the minion and attach to body as fixed — bypasses ALL z-index/stacking issues
+  const clone=atkEl.cloneNode(true);
+  clone.style.cssText=`position:fixed;left:${ar.left}px;top:${ar.top}px;width:${ar.width}px;height:${ar.height}px;pointer-events:none;z-index:9000;transition:transform .22s cubic-bezier(.25,0,.4,1),opacity .08s .2s`;
+  document.body.appendChild(clone);
+
+  // Hide original
+  atkEl.style.opacity="0";
+
+  // Kick off lunge forward
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    clone.style.transform=`translate(${dx}px,${dy}px) scale(1.05)`;
+  }));
+
   setTimeout(()=>{
-    atkEl.classList.remove("lunging");
-    if(par)par.classList.remove("lunging-parent");
-    onImpact();setTimeout(onDone,440);
-  },620);
+    // Impact — show damage, play recoil
+    onImpact();
+    clone.style.transition="transform .32s cubic-bezier(.2,1.2,.5,1)";
+    clone.style.transform="translate(0,0) scale(1)";
+    setTimeout(()=>{
+      clone.remove();
+      atkEl.style.opacity="";
+      onDone();
+    },340);
+  },240);
 }
 
 // ── SVG BADGE HELPERS (3D bevel) ─────
