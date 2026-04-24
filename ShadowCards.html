@@ -662,34 +662,13 @@ let _zoomSwipeHandler=null;
 function _showZoomEl(html,swipeable){
   hideZoom();
   const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=html;
-  if(swipeable){
-    // Listen on document so we catch moves even if touch started on the hand-wrap
-    let sx=null;
-    _zoomSwipeHandler=(e)=>{
-      if(!document.getElementById("zoom-overlay"))return;
-      const cx=e.touches?e.touches[0].clientX:e.clientX;
-      if(sx===null){sx=cx;return;}
-      const dx=cx-sx;
-      if(Math.abs(dx)>32){
-        const dir=dx<0?1:-1; // swipe left → next card (higher index)
-        const hand=GAME&&GAME.player.hand;
-        if(hand){
-          const ni=Math.max(0,Math.min(hand.length-1,zoomCardIdx+dir));
-          if(ni!==zoomCardIdx){sx=cx;showZoom(ni);return;}
-        }
-        sx=cx;
-      }
-    };
-    // Also initialise sx from the drag startX if available
-    if(drag.active)sx=drag.startX;
-    document.addEventListener("touchmove",_zoomSwipeHandler,{passive:true});
-    if(GAME&&GAME.player.hand.length>1){
-      const h=document.createElement("div");
-      h.id="zoom-hint";h.style.cssText="position:fixed;bottom:calc(50% - 190px);left:0;right:0;text-align:center;font-size:11px;color:rgba(255,200,80,.65);font-family:monospace;letter-spacing:1px;pointer-events:none;z-index:901";
-      h.textContent="← 左右滑動切換手牌 →";document.body.appendChild(h);
-    }
-  }else{ov.onclick=()=>hideZoom();}
+  if(!swipeable)ov.onclick=()=>hideZoom();
   document.body.appendChild(ov);
+  if(swipeable&&GAME&&GAME.player.hand.length>1){
+    const h=document.createElement("div");
+    h.id="zoom-hint";h.style.cssText="position:fixed;bottom:calc(50% - 190px);left:0;right:0;text-align:center;font-size:11px;color:rgba(255,200,80,.65);font-family:monospace;letter-spacing:1px;pointer-events:none;z-index:901";
+    h.textContent="← 左右滑動切換手牌 →";document.body.appendChild(h);
+  }
 }
 function hideZoom(){
   const z=document.getElementById("zoom-overlay");if(z)z.remove();
@@ -1130,13 +1109,37 @@ function onMove(e){
   // Fix 1: minion needs 50px drag distance, spells need 22px, board attacks need 10px
   const dragCard=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
   const threshold=drag.type==="board"?10:dragCard&&dragCard.type!=="minion"?22:50;
-  if(!drag.dragging&&dist>threshold){
-    // If zoom was triggered: block HORIZONTAL drag (swiping in zoom), allow VERTICAL (upward cast)
+  // Fix 1: use smaller threshold when zoom is showing (20px feels natural for swipe)
+  const swipeThreshold=drag.wasLP?20:threshold;
+  if(!drag.dragging&&dist>swipeThreshold){
     if(drag.wasLP){
-      const isVertical=Math.abs(p.y-drag.startY)>Math.abs(p.x-drag.startX)*1.5;
-      if(!isVertical)return; // horizontal swipe → let zoom handle it
-      // Vertical drag past wasLP: close zoom and start drag
-      hideZoom();
+      const adx=Math.abs(p.x-drag.startX),ady=Math.abs(p.y-drag.startY);
+      if(adx>ady){
+        // Horizontal swipe → find which hand card the finger is currently over
+        const hand=GAME&&GAME.player.hand;
+        if(hand&&hand.length>1){
+          const hw=document.querySelector(".hand-wrap");
+          if(hw){
+            const allHs=Array.from(hw.querySelectorAll(".hs"));
+            // Find the card whose left-edge strip contains the finger x
+            let hoverIdx=zoomCardIdx;
+            let bestIdx=0;
+            for(const hsEl of allHs){
+              const leftOffset=parseFloat(hsEl.style.left)||0;
+              const fanLeft=hsEl.parentElement?.getBoundingClientRect().left||0;
+              if(p.x>=fanLeft+leftOffset) bestIdx=+hsEl.dataset.hi;
+            }
+            hoverIdx=bestIdx;
+            if(hoverIdx!==zoomCardIdx)showZoom(hoverIdx);
+          }
+        }
+        return;
+      } else {
+        // Vertical (upward) → close zoom and start drag normally
+        hideZoom();
+        drag.wasLP=false;
+        // fall through to normal drag start below
+      }
     }
     clearLP();const g=GAME;if(!g)return;
     if(drag.type==="hand"){
