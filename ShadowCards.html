@@ -567,7 +567,9 @@ function lungeAtk(atkEl,defEl,onImpact,onDone){
     clone.style.transform="translate(0,0) scale(1)";
     setTimeout(()=>{
       clone.remove();
-      atkEl.style.opacity="";
+      // Only restore opacity if NOT being handled by playDeathAnim
+      // playDeathAnim sets pointerEvents:none as a marker
+      if(atkEl.style.pointerEvents!=="none")atkEl.style.opacity="";
       onDone();
     },340);
   },240);
@@ -1441,9 +1443,11 @@ function doPlayerAtk(bi,tw,ti){
   lungeAtk(atkEl,defEl,()=>{
     if(defEl){const r=defEl.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,defDmg);}
     if(atkEl&&atkDmg>0){const r=atkEl.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,atkDmg);}
-    if(defDies&&defEl)playDeathAnim(defEl);if(atkDies&&atkEl)playDeathAnim(atkEl);
+    if(defDies&&defEl)playDeathAnim(defEl);
+    if(atkDies&&atkEl)playDeathAnim(atkEl);
   },()=>{
     animLock=false;
+    // Don't restore atkEl opacity — playDeathAnim already hid it
     const anyDies=defDies||atkDies;
     setTimeout(()=>{
       if(anyDies){
@@ -1482,7 +1486,7 @@ function act(a){
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
       if(card&&card.effect==="dmg"){
-        setTimeout(()=>{document.querySelectorAll(".em .minion,#ah").forEach(el=>{if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val);}});shakeHpBar("ai");},60);
+        setTimeout(()=>{document.querySelectorAll(".em .minion,#ah").forEach(el=>{if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val);}});},60);
       }
       const ns2={...castS(g,g.selCard,"player","ai",-2),selCard:null,selAtk:null,mode:"default"};
       const died2=spellDeathAnims(g,ns2);
@@ -1527,7 +1531,6 @@ function act(a){
       if(card){
         const ah=document.getElementById("ah");
         if(ah){const r=ah.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}
-        if(card.effect==="dmg"||card.effect==="drain")shakeHpBar("ai");
       }
       GAME=ns;
     }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",-1);return;}
