@@ -197,6 +197,320 @@ button:active{transform:translateY(2px)!important;box-shadow:0 1px 0 rgba(0,0,0,
 </head>
 <body><div id="root"></div>
 <script>
+// ══════════════════════════════════════════════════════
+// ██████╗ SHADOW CARDS AUDIO ENGINE
+// ══════════════════════════════════════════════════════
+const Audio={
+  ctx:null,masterGain:null,bgmGain:null,sfxGain:null,
+  bgmPlaying:false,bgmNodes:[],_nextBeat:0,_schedAhead:.12,_schedInterval:null,
+  _beatLen:.0,_seq:[],_seqIdx:0,_started:false,
+
+  init(){
+    if(this.ctx)return;
+    this.ctx=new(window.AudioContext||window.webkitAudioContext)();
+    this.masterGain=this.ctx.createGain();this.masterGain.gain.value=.7;
+    this.bgmGain=this.ctx.createGain();this.bgmGain.gain.value=.28;
+    this.sfxGain=this.ctx.createGain();this.sfxGain.gain.value=.85;
+    this.bgmGain.connect(this.masterGain);
+    this.sfxGain.connect(this.masterGain);
+    this.masterGain.connect(this.ctx.destination);
+  },
+
+  // ── Utility ──────────────────────────────────────────
+  _osc(type,freq,start,dur,vol=.5,dest=null){
+    const g=dest||this.sfxGain;
+    const o=this.ctx.createOscillator();
+    const a=this.ctx.createGain();
+    o.type=type;o.frequency.setValueAtTime(freq,start);
+    a.gain.setValueAtTime(0,start);
+    a.gain.linearRampToValueAtTime(vol,start+.004);
+    a.gain.exponentialRampToValueAtTime(.0001,start+dur);
+    o.connect(a);a.connect(g);
+    o.start(start);o.stop(start+dur+.01);
+    return o;
+  },
+  _noise(start,dur,vol=.3,lpFreq=800,hpFreq=200){
+    const len=Math.ceil(this.ctx.sampleRate*dur)+100;
+    const buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+    const src=this.ctx.createBufferSource();src.buffer=buf;
+    const lp=this.ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=lpFreq;
+    const hp=this.ctx.createBiquadFilter();hp.type="highpass";hp.frequency.value=hpFreq;
+    const a=this.ctx.createGain();
+    a.gain.setValueAtTime(vol,start);
+    a.gain.exponentialRampToValueAtTime(.0001,start+dur);
+    src.connect(hp);hp.connect(lp);lp.connect(a);a.connect(this.sfxGain);
+    src.start(start);src.stop(start+dur+.02);
+  },
+  _rev(src,mix=.25){
+    // Simple convolution reverb approximation with delay
+    const d=this.ctx.createDelay(.08);d.delayTime.value=.06;
+    const g=this.ctx.createGain();g.gain.value=mix;
+    src.connect(d);d.connect(g);g.connect(this.sfxGain);
+  },
+
+  // ══ SOUND EFFECTS ════════════════════════════════════
+  sfxClick(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",1200,t,.04,.18);
+    this._osc("sine",800,t+.02,.03,.1);
+  },
+  sfxCardFlip(){
+    // Paper rustle: burst of filtered noise + high transient
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._noise(t,.055,.45,3200,600);
+    this._noise(t+.02,.04,.28,5000,2000);
+    this._osc("triangle",2400,t,.015,.12);
+  },
+  sfxCardDraw(){
+    // Swoosh + soft paper land
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._noise(t,.09,.35,1200,80);
+    const o=this.ctx.createOscillator();const a=this.ctx.createGain();
+    o.type="sine";o.frequency.setValueAtTime(600,t);
+    o.frequency.exponentialRampToValueAtTime(200,t+.1);
+    a.gain.setValueAtTime(.25,t);a.gain.exponentialRampToValueAtTime(.001,t+.12);
+    o.connect(a);a.connect(this.sfxGain);o.start(t);o.stop(t+.14);
+    this._noise(t+.08,.04,.3,800,200);
+  },
+  sfxCardAddDeck(){
+    // Light wooden thud + paper slip
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",180,t,.08,.35);
+    this._osc("triangle",320,t,.05,.2);
+    this._noise(t,.03,.4,1600,400);
+  },
+  sfxMinionSummon(){
+    // Rising pop + sparkle
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    const o=this.ctx.createOscillator();const a=this.ctx.createGain();
+    o.type="sawtooth";
+    o.frequency.setValueAtTime(120,t);
+    o.frequency.exponentialRampToValueAtTime(480,t+.12);
+    a.gain.setValueAtTime(.3,t);a.gain.exponentialRampToValueAtTime(.001,t+.22);
+    const f=this.ctx.createBiquadFilter();f.type="bandpass";f.frequency.value=800;f.Q.value=2;
+    o.connect(f);f.connect(a);a.connect(this.sfxGain);o.start(t);o.stop(t+.25);
+    [0,.04,.08].forEach((d,i)=>this._osc("sine",[1200,1600,2000][i],t+d,.08,.12));
+  },
+  sfxMinionAttack(){
+    // Impact thud + crack
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sawtooth",80,t,.12,.55);
+    this._osc("square",160,t,.05,.4);
+    this._noise(t,.06,.5,2500,300);
+    this._osc("sine",400,t+.03,.04,.3);
+  },
+  sfxSpellCast(){
+    // Magical shimmer: rising sweep + sparkles
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    const o=this.ctx.createOscillator();const a=this.ctx.createGain();
+    o.type="sine";
+    o.frequency.setValueAtTime(300,t);
+    o.frequency.exponentialRampToValueAtTime(1200,t+.3);
+    a.gain.setValueAtTime(0,t);a.gain.linearRampToValueAtTime(.4,t+.05);
+    a.gain.exponentialRampToValueAtTime(.001,t+.38);
+    o.connect(a);a.connect(this.sfxGain);o.start(t);o.stop(t+.4);
+    for(let i=0;i<5;i++){
+      const d=i*.045;const f=800+i*300+Math.random()*200;
+      this._osc("sine",f,t+d,.1,.14);
+    }
+    this._noise(t,.2,.18,4000,1500);
+  },
+  sfxSpellDmg(){
+    // Heavy magical impact
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sawtooth",120,t,.18,.5);
+    this._noise(t,.12,.4,3000,200);
+    [0,.03,.06].forEach((d,i)=>this._osc("square",[200,160,100][i],t+d,.1,.25));
+  },
+  sfxSpellHeal(){
+    // Gentle ascending chime
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    [523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+      this._osc("sine",f,t+i*.07,.3,.22);
+      this._osc("triangle",f*2,t+i*.07,.15,.1);
+    });
+  },
+  sfxHpHit(){
+    // Body hit thud
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",60,t,.15,.6);
+    this._osc("sine",90,t,.08,.4);
+    this._noise(t,.07,.35,800,50);
+  },
+  sfxMinionDeath(){
+    // Descending crumble
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    const o=this.ctx.createOscillator();const a=this.ctx.createGain();
+    o.type="sawtooth";
+    o.frequency.setValueAtTime(440,t);
+    o.frequency.exponentialRampToValueAtTime(80,t+.25);
+    a.gain.setValueAtTime(.4,t);a.gain.exponentialRampToValueAtTime(.001,t+.3);
+    o.connect(a);a.connect(this.sfxGain);o.start(t);o.stop(t+.32);
+    this._noise(t+.05,.12,.3,1500,100);
+  },
+  sfxTurnStart(){
+    // Ascending arpeggio
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    [261.63,329.63,392,523.25].forEach((f,i)=>this._osc("sine",f,t+i*.1,.25,.25));
+  },
+  sfxTurnStartAI(){
+    // Descending mysterious arpeggio
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    [523.25,392,329.63,261.63].forEach((f,i)=>this._osc("triangle",f,t+i*.1,.25,.2));
+  },
+  sfxVictory(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    const mel=[523.25,659.25,783.99,1046.5,783.99,1046.5,1318.5];
+    mel.forEach((f,i)=>this._osc("sine",f,t+i*.13,.4,.3));
+    mel.forEach((f,i)=>this._osc("triangle",f/2,t+i*.13,.4,.15));
+  },
+  sfxDefeat(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    [440,415.3,392,349.23,311.13].forEach((f,i)=>{
+      this._osc("sawtooth",f,t+i*.18,.5,.22);
+      this._osc("sine",f/2,t+i*.18,.4,.12);
+    });
+  },
+  sfxEndTurn(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",440,t,.08,.22);
+    this._osc("sine",550,t+.06,.08,.18);
+  },
+  sfxToast(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",800,t,.04,.12);
+  },
+  sfxToastErr(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("square",200,t,.1,.2);
+    this._osc("square",160,t+.05,.08,.15);
+  },
+
+  // ══ BACKGROUND MUSIC ═════════════════════════════════
+  // Mysterious-epic-playful: D minor + chromatic, bouncy rhythm
+  startBGM(){
+    if(!this.ctx||this.bgmPlaying)return;
+    this.bgmPlaying=true;
+    const bpm=126;
+    this._beatLen=60/bpm;
+    this._nextBeat=this.ctx.currentTime+.1;
+    this._seqIdx=0;
+
+    // Scale: D minor pentatonic + some chromatic colour
+    // Notes as semitones from D3(174.61hz): D=0,F=3,G=5,A=7,C=10,D+12=12,F+=15
+    const D3=174.61;
+    const note=n=>D3*Math.pow(2,n/12);
+
+    // Melody sequences (4 bar patterns that cycle)
+    const melPatterns=[
+      // Pattern 0: Main theme - playful & mysterious
+      [{n:12,d:1},{n:15,d:.5},{n:14,d:.5},{n:12,d:1},{n:10,d:1},{n:7,d:2},
+       {n:10,d:1},{n:12,d:.5},{n:10,d:.5},{n:7,d:1},{n:5,d:1},{n:3,d:2}],
+      // Pattern 1: Epic ascending run
+      [{n:0,d:.5},{n:3,d:.5},{n:5,d:.5},{n:7,d:.5},{n:10,d:1},{n:12,d:.5},{n:14,d:.5},
+       {n:15,d:2},{n:12,d:.5},{n:10,d:.5},{n:7,d:1},{n:5,d:.5},{n:3,d:.5}],
+      // Pattern 2: Quirky playful
+      [{n:15,d:.25},{n:14,d:.25},{n:15,d:.5},{n:12,d:1},{n:10,d:.25},{n:7,d:.25},
+       {n:10,d:.5},{n:12,d:1},{n:7,d:.5},{n:5,d:.5},{n:3,d:.5},{n:5,d:.5},{n:7,d:2}],
+    ];
+    // Bass pattern (repeating)
+    const bassNotes=[0,0,7,10,0,3,5,7].map(n=>note(n)/2);
+
+    let melPat=0,melNote=0,bassIdx=0,beat=0;
+    const BEATS_PER_PAT=16;
+
+    const schedule=()=>{
+      while(this._nextBeat<this.ctx.currentTime+this._schedAhead){
+        const t=this._nextBeat;
+        // Bass - every beat
+        const bFreq=bassNotes[bassIdx%bassNotes.length];
+        const bo=this.ctx.createOscillator();const ba=this.ctx.createGain();
+        bo.type="triangle";bo.frequency.value=bFreq;
+        ba.gain.setValueAtTime(0,t);ba.gain.linearRampToValueAtTime(.22,t+.01);
+        ba.gain.exponentialRampToValueAtTime(.001,t+this._beatLen*.85);
+        bo.connect(ba);ba.connect(this.bgmGain);bo.start(t);bo.stop(t+this._beatLen);
+
+        // Sub bass pulse
+        const so=this.ctx.createOscillator();const sa=this.ctx.createGain();
+        so.type="sine";so.frequency.value=bFreq/2;
+        sa.gain.setValueAtTime(.18,t);sa.gain.exponentialRampToValueAtTime(.001,t+this._beatLen*.5);
+        so.connect(sa);sa.connect(this.bgmGain);so.start(t);so.stop(t+this._beatLen);
+
+        // Melody - follows rhythm pattern
+        const pat=melPatterns[melPat%melPatterns.length];
+        const mn=pat[melNote%pat.length];
+        const mFreq=note(mn.n);const mDur=mn.d*this._beatLen;
+        const mo=this.ctx.createOscillator();const ma=this.ctx.createGain();
+        mo.type="sine";mo.frequency.setValueAtTime(mFreq,t);
+        ma.gain.setValueAtTime(0,t);ma.gain.linearRampToValueAtTime(.18,t+.015);
+        ma.gain.exponentialRampToValueAtTime(.001,t+mDur*.9);
+        // Slight vibrato for expression
+        const vib=this.ctx.createOscillator();const vibG=this.ctx.createGain();
+        vib.frequency.value=5.5;vibG.gain.value=mFreq*.008;
+        vib.connect(vibG);vibG.connect(mo.frequency);
+        mo.connect(ma);ma.connect(this.bgmGain);
+        mo.start(t);mo.stop(t+mDur+.02);
+        vib.start(t);vib.stop(t+mDur+.02);
+
+        // Bell/pluck accent every 2 beats for mystery
+        if(beat%2===0){
+          const bf=note(mn.n+12);
+          const bellO=this.ctx.createOscillator();const bellA=this.ctx.createGain();
+          bellO.type="sine";bellO.frequency.value=bf;
+          bellA.gain.setValueAtTime(.09,t);bellA.gain.exponentialRampToValueAtTime(.001,t+.6);
+          bellO.connect(bellA);bellA.connect(this.bgmGain);
+          bellO.start(t);bellO.stop(t+.65);
+        }
+
+        // Percussion - kick on 1&3, snare-noise on 2&4
+        if(beat%4===0||beat%4===2){
+          // Kick
+          const ko=this.ctx.createOscillator();const ka=this.ctx.createGain();
+          ko.type="sine";ko.frequency.setValueAtTime(180,t);
+          ko.frequency.exponentialRampToValueAtTime(40,t+.08);
+          ka.gain.setValueAtTime(.45,t);ka.gain.exponentialRampToValueAtTime(.001,t+.12);
+          ko.connect(ka);ka.connect(this.bgmGain);ko.start(t);ko.stop(t+.14);
+        }
+        if(beat%4===1||beat%4===3){
+          // Hi-hat / snare-like
+          const hBuf=this.ctx.createBuffer(1,Math.ceil(this.ctx.sampleRate*.05),this.ctx.sampleRate);
+          const hd=hBuf.getChannelData(0);for(let i=0;i<hd.length;i++)hd[i]=Math.random()*2-1;
+          const hSrc=this.ctx.createBufferSource();hSrc.buffer=hBuf;
+          const hf=this.ctx.createBiquadFilter();hf.type="highpass";hf.frequency.value=4000;
+          const ha=this.ctx.createGain();ha.gain.setValueAtTime(.14,t);ha.gain.exponentialRampToValueAtTime(.001,t+.05);
+          hSrc.connect(hf);hf.connect(ha);ha.connect(this.bgmGain);
+          hSrc.start(t);hSrc.stop(t+.06);
+        }
+
+        // Advance sequencer
+        melNote++;beat++;bassIdx++;
+        if(melNote>=pat.length){melNote=0;if(beat%(BEATS_PER_PAT)===0)melPat++;}
+        this._nextBeat+=this._beatLen;
+      }
+    };
+    schedule();
+    this._schedInterval=setInterval(schedule,50);
+  },
+
+  stopBGM(){
+    if(!this.bgmPlaying)return;
+    this.bgmPlaying=false;
+    clearInterval(this._schedInterval);
+    if(this.bgmGain)this.bgmGain.gain.linearRampToValueAtTime(0,this.ctx.currentTime+.5);
+    setTimeout(()=>{if(this.bgmGain)this.bgmGain.gain.value=.28;},600);
+  },
+
+  setVolume(v){if(this.masterGain)this.masterGain.gain.value=v;},
+  mute(){this.setVolume(0);},
+  unmute(){this.setVolume(.7);},
+  _start(){if(!this._started){this._started=true;this.init();this.startBGM();}},
+};
+
+// Auto-start audio on first user interaction
+document.addEventListener("touchstart",()=>Audio._start(),{once:true,passive:true});
+document.addEventListener("mousedown",()=>Audio._start(),{once:true});
 // ── DATA ──────────────────────────────
 const CARDS=[
   {id:"m01",name:"暗影精靈",cost:1,type:"minion",atk:1,hp:2,sym:"◈"},
@@ -228,9 +542,16 @@ let _u=0;const uid=()=>++_u;
 const shuf=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;};
 const mk=def=>({...def,uid:uid(),curHp:def.hp||0,sick:true,attacked:false});
 const alog=(s,m)=>({...s,log:[m,...s.log.slice(0,29)]});
-const chk=s=>{if(s.player.hp<=0&&s.ai.hp<=0)return{...s,over:"draw"};if(s.player.hp<=0)return{...s,over:"lose"};if(s.ai.hp<=0)return{...s,over:"win"};return s;};
+const chk=s=>{
+  if(s.player.hp<=0&&s.ai.hp<=0)return{...s,over:"draw"};
+  if(s.player.hp<=0){setTimeout(()=>Audio.sfxDefeat(),300);return{...s,over:"lose"};}
+  if(s.ai.hp<=0){setTimeout(()=>Audio.sfxVictory(),300);return{...s,over:"win"};}
+  return s;
+};
 const draw1=(s,who)=>{const p=s[who];if(!p.deck.length){return chk(alog({...s,[who]:{...p,hp:p.hp-5}},"💀"+(who==="player"?"你":"AI")+"牌庫空-5HP"));}const[d,...rest]=p.deck;if(p.hand.length>=10)return alog({...s,[who]:{...p,deck:rest}},d.name+"燒毀");return who==="player"?alog({...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},lastDraws:[...(s.lastDraws||[]),d.uid]},"🃏抽："+d.name):{...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},aiNewCard:true};};
-const startT=(s0,who)=>{const p=s0[who],nm=Math.min(10,p.maxMana+1);let s={...s0,[who]:{...p,maxMana:nm,mana:nm,board:p.board.map(m=>({...m,sick:false,attacked:false}))},turn:who,mode:"default",selCard:null,selAtk:null,lastDraws:[],aiNewCard:false};s=draw1(s,who);if(!s.over)s=alog(s,"━━"+(who==="player"?"你的回合":"電腦回合")+"━━");return s;};
+const startT=(s0,who)=>{const p=s0[who],nm=Math.min(10,p.maxMana+1);let s={...s0,[who]:{...p,maxMana:nm,mana:nm,board:p.board.map(m=>({...m,sick:false,attacked:false}))},turn:who,mode:"default",selCard:null,selAtk:null,lastDraws:[],aiNewCard:false};s=draw1(s,who);if(!s.over)s=alog(s,"━━"+(who==="player"?"你的回合":"電腦回合")+"━━");
+if(who==="player")setTimeout(()=>Audio.sfxTurnStart(),200);
+return s;};
 const playM=(s0,hi,who)=>{const p=s0[who],c=p.hand[hi];if(!c||c.type!=="minion"||p.mana<c.cost||p.board.length>=7)return s0;const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};return alog({...s0,[who]:{...p,mana:p.mana-c.cost,hand:p.hand.filter((_,i)=>i!==hi),board:[...p.board,mn]}},"⚔️"+(who==="player"?"你":"AI")+"召："+c.name);};
 const castS=(s0,hi,who,tw,ti)=>{
   const p=s0[who],c=p.hand[hi];
@@ -400,6 +721,7 @@ function shakeHpBar(who){
   if(!el)return;
   const row=el.closest(".hp-bar-row");
   if(!row)return;
+  Audio.sfxHpHit();
   row.classList.remove("shake");void row.offsetWidth;row.classList.add("shake");
   setTimeout(()=>row.classList.remove("shake"),460);
 }
@@ -480,6 +802,7 @@ function animDrawCards(count,who,delay=0){
 // Play death animation on a body-fixed clone so render() doesn't kill it mid-animation
 function playDeathAnim(el){
   if(!el)return;
+  Audio.sfxMinionDeath();
   const r=el.getBoundingClientRect();
   const clone=el.cloneNode(true);
   clone.className="minion";
@@ -543,6 +866,7 @@ function spellDeathAnims(prevState, nextState){
 
 function lungeAtk(atkEl,defEl,onImpact,onDone){
   if(!atkEl||!defEl){onImpact();setTimeout(onDone,0);return;}
+  Audio.sfxMinionAttack();
   const ar=atkEl.getBoundingClientRect(),dr=defEl.getBoundingClientRect();
   const dx=((dr.left+dr.width/2)-(ar.left+ar.width/2))*.78;
   const dy=((dr.top+dr.height/2)-(ar.top+ar.height/2))*.78;
@@ -911,9 +1235,9 @@ function buildDeck(){
   }));
   _prevBarH=targetHeights.map(t=>t?.h??0);
 
-  document.getElementById("dbk").onclick=()=>{_prevBarH=null;SCR="menu";render();};
-  document.getElementById("dsv").onclick=()=>{if(tot===30){DECK=[...deckEdit];SCR="menu";render();}};
-  document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;deckEdit=[];buildDeck();};
+  document.getElementById("dbk").onclick=()=>{_prevBarH=null;Audio.sfxClick();SCR="menu";render();};
+  document.getElementById("dsv").onclick=()=>{if(tot===30){Audio.sfxClick();DECK=[...deckEdit];SCR="menu";render();}};
+  document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;Audio.sfxClick();deckEdit=[];buildDeck();};
 
   // Pool card interactions
   document.querySelectorAll(".pc[data-id]").forEach(card=>{
@@ -938,6 +1262,7 @@ function buildDeck(){
       if(lpW){lpW=false;return;}
       if(cnt(id)>=2)return;
       if(tot>=30){toast("牌組已達30張上限！","err");return;}
+      Audio.sfxCardAddDeck();
       flyCardToDeck(card);
       setTimeout(()=>{deckEdit=[...deckEdit,id];buildDeck();},300);
     });
@@ -1007,8 +1332,8 @@ function showMenu(){
     </div>
     <div style="position:absolute;bottom:24px;font-size:10px;color:#222;letter-spacing:4px;font-family:monospace;z-index:1">${CARDS.length} CARDS IN COLLECTION</div>
   </div>`;
-  document.getElementById("bs").onclick=()=>{GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
-  document.getElementById("bd").onclick=()=>{SCR="deck";stopFireflies();render();};
+  document.getElementById("bs").onclick=()=>{Audio.sfxClick();GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
+  document.getElementById("bd").onclick=()=>{Audio.sfxClick();SCR="deck";stopFireflies();render();};
 
   // Purple title glow — slow breathing ~3s cycle
   const title=document.getElementById("menu-title");
@@ -1085,11 +1410,11 @@ function showBattle(){
     </div>
     ${goH}
   </div>`;
-  if(over){document.getElementById("gmn").onclick=()=>{GAME=null;SCR="menu";render();};return;}
-  document.getElementById("bsv").onclick=()=>{GAME=null;SCR="menu";render();};
+  if(over){document.getElementById("gmn").onclick=()=>{Audio.sfxClick();GAME=null;SCR="menu";render();};return;}
+  document.getElementById("bsv").onclick=()=>{Audio.sfxClick();GAME=null;SCR="menu";render();};
   if(isP){
-    document.getElementById("bet").onclick=()=>act({t:"ET"});
-    const bc=document.getElementById("bcn");if(bc)bc.onclick=()=>act({t:"CL"});
+    document.getElementById("bet").onclick=()=>{Audio.sfxEndTurn();act({t:"ET"});};
+    const bc=document.getElementById("bcn");if(bc)bc.onclick=()=>{Audio.sfxClick();act({t:"CL"});};
     document.querySelectorAll(".em").forEach(e=>e.onclick=ev=>{ev.stopPropagation();act({t:"EM",i:+e.dataset.ei});});
     document.getElementById("ah").onclick=()=>act({t:"EH"});
     // Also allow clicking the enemy hp-bar-row as hero target
@@ -1521,7 +1846,10 @@ function act(a){
       const card=g.player.hand[g.selCard];
       const ns={...castS(g,g.selCard,"player","ai",a.i),selCard:null,selAtk:null,mode:"default"};
       const died=spellDeathAnims(g,ns);
-      if(card){const t=document.querySelector(`.em[data-ei="${a.i}"] .minion`)||document.querySelector(`.em[data-ei="${a.i}"]`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}}
+      if(card){
+        if(card.effect==="dmg")Audio.sfxSpellDmg();else Audio.sfxSpellCast();
+        const t=document.querySelector(`.em[data-ei="${a.i}"] .minion`)||document.querySelector(`.em[data-ei="${a.i}"]`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}
+      }
       GAME=ns;if(died)setTimeout(()=>render(),1800);
     }else if(g.mode==="attacking"&&g.selAtk!=null){doPlayerAtk(g.selAtk,"ai",a.i);return;}
   }else if(a.t==="EH"){
@@ -1529,6 +1857,7 @@ function act(a){
       const card=g.player.hand[g.selCard];
       const ns={...castS(g,g.selCard,"player","ai",-1),selCard:null,selAtk:null,mode:"default"};
       if(card){
+        if(card.effect==="dmg")Audio.sfxSpellDmg();else if(card.effect==="heal")Audio.sfxSpellHeal();else Audio.sfxSpellCast();
         const ah=document.getElementById("ah");
         if(ah){const r=ah.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,card.effect==="heal");}
       }
@@ -1538,6 +1867,7 @@ function act(a){
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
       const isHeal=card&&card.effect==="heal";
+      if(isHeal)Audio.sfxSpellHeal();else Audio.sfxSpellCast();
       const ns={...castS(g,g.selCard,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
       if(card){const ph=document.getElementById("ph");if(ph){const r=ph.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,isHeal);}}
       GAME=ns;
@@ -1545,6 +1875,7 @@ function act(a){
   }else if(a.t==="PM"){
     if(g.mode==="targeting"&&g.selCard!=null){
       const card=g.player.hand[g.selCard];
+      if(card)Audio.sfxSpellCast();
       const ns={...castS(g,g.selCard,"player","player",a.i),selCard:null,selAtk:null,mode:"default"};
       const died=spellDeathAnims(g,ns);
       if(card){const t=document.querySelector(`.om[data-oi="${a.i}"] .minion`);if(t){const r=t.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,card.val,true);}}
@@ -1554,11 +1885,12 @@ function act(a){
     const c=g.player.hand[a.i];if(!c)return;if(c.cost>g.player.mana){toast("魔力不足！","err");return;}if(c.type!=="minion")return;if(g.player.board.length>=7){toast("戰場已滿！","err");return;}
     const slot=Math.min(Math.max(0,a.slot??g.player.board.length),g.player.board.length);const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};const board=[...g.player.board];board.splice(slot,0,mn);
     GAME={...alog({...g,player:{...g.player,mana:g.player.mana-c.cost,hand:g.player.hand.filter((_,i)=>i!==a.i),board}},`⚔️你召：${c.name}`),selCard:null,selAtk:null,mode:"default"};
+    Audio.sfxMinionSummon();
     newSummonUid=mn.uid;setTimeout(()=>{newSummonUid=null;},500);
   }else if(a.t==="BOARD_ATK"){
     const m=g.player.board[a.bi];if(m&&m.sick){toast("召喚後本回合不能攻擊","warn");return;}if(m&&m.attacked){toast("此隨從本回合已行動","warn");return;}doPlayerAtk(a.bi,a.tw,a.ti);return;
   }else if(a.t==="CL"){GAME={...g,selCard:null,selAtk:null,mode:"default"};
-  }else if(a.t==="ET"){toast("對方回合","ai");GAME=startT({...g,selCard:null,selAtk:null,mode:"default"},"ai");}
+  }else if(a.t==="ET"){toast("對方回合","ai");Audio.sfxTurnStartAI();GAME=startT({...g,selCard:null,selAtk:null,mode:"default"},"ai");}
   render();
 }
 
@@ -1603,7 +1935,7 @@ function render(){
         });
 
         // Step 3: after slide settles (~320ms), fly in new cards one by one
-        draws.forEach((uid,i)=>animFlyIntoSlot(uid, 320+i*650));
+        draws.forEach((uid,i)=>{setTimeout(()=>Audio.sfxCardDraw(),320+i*650);animFlyIntoSlot(uid, 320+i*650);});
       });
     }
     const clearDelay=draws.length?320+draws.length*650+750:700;
