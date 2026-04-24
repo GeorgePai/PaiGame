@@ -14,7 +14,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 .card{width:82px;height:112px;background:#f4f0e8;border:1px solid #222;border-radius:6px;position:relative;overflow:hidden;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.55)}
 .card.sm{width:68px;height:94px}
 .card.sel{border:2px solid #ffd700!important;box-shadow:0 0 18px rgba(255,215,0,.75)!important}
-.card.playable{border:1px solid rgba(20,105,220,.35)!important;box-shadow:0 0 22px rgba(20,130,255,.72),0 0 8px rgba(20,130,255,.5)!important;animation:pBlue 1.8s ease-in-out infinite}
+.card.playable{border:1px solid rgba(30,120,255,.6)!important;box-shadow:0 0 28px rgba(0,100,255,.9),0 0 10px rgba(30,120,255,.75),0 0 4px rgba(80,160,255,.5)!important;animation:pBlue 1.8s ease-in-out infinite}
 .card.faded{opacity:.22;filter:grayscale(70%);pointer-events:none}
 .cname{position:absolute;top:26px;left:2px;right:2px;text-align:center;font-size:8px;color:#111;font-weight:bold;line-height:1.1}
 .card.sm .cname{top:17px;font-size:7px}
@@ -27,7 +27,7 @@ button{font-family:Georgia,serif;cursor:pointer}
 
 /* ── MINION ── */
 .minion{width:68px;height:88px;background:#f4f0e8;border:1px solid #444;border-radius:6px;position:relative;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.minion.can{border:1px solid rgba(20,105,220,.3)!important;box-shadow:0 0 20px rgba(20,130,255,.68),0 0 7px rgba(20,130,255,.45)!important;animation:pBlue 1.8s ease-in-out infinite}
+.minion.can{border:1px solid rgba(30,120,255,.55)!important;box-shadow:0 0 26px rgba(0,100,255,.88),0 0 9px rgba(30,120,255,.7),0 0 3px rgba(80,160,255,.45)!important;animation:pBlue 1.8s ease-in-out infinite}
 .minion.atk-sel{background:#1a1a1a;border:2px solid #ffd700!important;box-shadow:0 0 16px rgba(255,215,0,.65)!important;animation:none!important}
 .minion.glow{border:2px dashed #c83030!important;box-shadow:0 0 10px rgba(200,50,50,.4)!important}
 .minion.sick{opacity:.62}
@@ -118,7 +118,8 @@ button{font-family:Georgia,serif;cursor:pointer}
 .hp-bar-row.top{background:#0a0a0a;border-bottom:1px solid #1a1a1a}
 .hp-bar-row.bot{background:#0a0a0a;border-top:1px solid #1a1a1a;border-bottom:3px solid #050505}
 .hp-bar-track{flex:1;height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;position:relative;border:1.5px solid #000;box-shadow:0 1px 4px rgba(0,0,0,.7) inset}
-.hp-bar-fill{height:100%;border-radius:3px;transition:width .55s cubic-bezier(.25,.8,.25,1)}
+.hp-bar-lag{position:absolute;left:0;top:0;height:100%;background:rgba(255,150,20,.75);border-radius:3px}
+.hp-bar-fill{position:absolute;left:0;top:0;height:100%;border-radius:3px;transition:width .55s cubic-bezier(.25,.8,.25,1)}
 .hp-bar-fill.hit{animation:hpFlash .5s ease-out}
 .hp-bar-row.shake{animation:hpShake .45s ease-out}
 .ai-hand-wrap{flex-shrink:0;height:108px;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;background:#090909;border-bottom:1px solid #1a1a1a;overflow:visible}
@@ -386,20 +387,32 @@ function floatDmg(x,y,dmg,heal=false){
   const el=document.createElement("div");el.className="float-dmg";el.textContent=(heal?"+":"-")+dmg;
   el.style.cssText=`left:${x-16}px;top:${y-12}px;color:${heal?"#78e878":"#ff6855"};font-size:${dmg>=5?22:17}px`;
   document.body.appendChild(el);setTimeout(()=>el.remove(),980);
-  // Fix 5: flash the hp bar of the hit hero
   if(!heal){
+    // Shake + flash hero HP bar if hit near it
     const barsToFlash=[];
-    // Find which hero bar was hit based on y position
     const ph=document.getElementById("ph"),ah=document.getElementById("ah");
-    if(ph){const r=ph.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push(ph.closest(".hp-bar-row"));}
-    if(ah){const r=ah.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push(ah.closest(".hp-bar-row"));}
-    barsToFlash.forEach(row=>{
-      if(!row)return;
+    if(ph){const r=ph.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push({row:ph.closest(".hp-bar-row"),who:"player"});}
+    if(ah){const r=ah.getBoundingClientRect();if(Math.abs(y-r.top)<80)barsToFlash.push({row:ah.closest(".hp-bar-row"),who:"ai"});}
+    barsToFlash.forEach(({row,who})=>{
+      if(!row||!GAME)return;
       const fill=row.querySelector(".hp-bar-fill");
       if(fill){fill.classList.remove("hit");void fill.offsetWidth;fill.classList.add("hit");setTimeout(()=>fill.classList.remove("hit"),520);}
-      // Fix 6: shake the whole bar row for impact feel
       row.classList.remove("shake");void row.offsetWidth;row.classList.add("shake");
       setTimeout(()=>row.classList.remove("shake"),460);
+      // Fix 1: trigger lag bar immediately on damage
+      const curHp=GAME[who].hp;
+      if(lagHp[who]>curHp){
+        const lagEl=row.querySelector(".hp-bar-lag");
+        if(lagEl){
+          void lagEl.offsetWidth;
+          setTimeout(()=>{
+            if(!GAME)return;
+            const lagEl2=row.querySelector(".hp-bar-lag");
+            if(lagEl2){lagEl2.style.transition="width 1.2s cubic-bezier(.1,.5,.3,1)";lagEl2.style.width=Math.max(0,curHp/50*100)+"%";}
+            lagHp[who]=curHp;
+          },420);
+        }
+      }
     });
   }
 }
@@ -587,15 +600,22 @@ const hMinion=(m,sel,glow,ns)=>{const can=!m.sick&&!m.attacked,lo=m.curHp/m.hp<0
   <div class="ms">${m.sym}</div>
   ${svgTri(m.atk,"#d86018",17,17,8)}${svgDrop(m.curHp,lo?"#881818":"#c22828","#ffe8e8",14,17,8)}</div>`;};
 // ── HERO HP BAR (compact, replaces portrait) ──────────────
+// Lag bar state: tracks displayed "ghost" HP for the orange lag bar per hero
+const lagHp={player:50,ai:50};
+
 function hHpBar(hp,isAI,tgt,id){
   const pct=Math.max(0,Math.min(100,hp/50*100));
+  const who=isAI?"ai":"player";
+  const lagPct=Math.max(0,Math.min(100,lagHp[who]/50*100));
   const barCol=hp>25?"#c03030":hp>12?"#b85020":"#882020";
   const glow=hp<=12?"box-shadow:0 0 8px rgba(220,60,60,.7)":"";
-  // Small icon: skull for AI, shield for player
   const icon=isAI
     ?`<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="10" r="8" fill="#2a1010" stroke="#5a2020" stroke-width="1"/><ellipse cx="9" cy="10" rx="2.2" ry="2.5" fill="#cc2222"/><ellipse cx="15" cy="10" rx="2.2" ry="2.5" fill="#cc2222"/><ellipse cx="9" cy="10" rx="1.1" ry="1.3" fill="#ff4444" opacity=".7"/><ellipse cx="15" cy="10" rx="1.1" ry="1.3" fill="#ff4444" opacity=".7"/><path d="M9,14.5 L9,17 L11,17 L11,19 L13,19 L13,17 L15,17 L15,14.5" fill="#2a1010" stroke="#5a2020" stroke-width=".8"/></svg>`
     :`<svg width="24" height="24" viewBox="0 0 24 24"><path d="M12,2 L20,6 L20,13 Q20,19 12,22 Q4,19 4,13 L4,6 Z" fill="#141430" stroke="#2a2a60" stroke-width="1.2"/><rect x="9" y="8" width="6" height="9" rx="1" fill="#1a1a50"/><rect x="10" y="9" width="4" height="4" rx=".5" fill="#3a5acc" opacity=".8"/><rect x="10.5" y="14" width="3" height="2" rx=".5" fill="#3a5acc" opacity=".6"/></svg>`;
-  return`<div id="${id}" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:${tgt?"pointer":"default"};${tgt?"filter:drop-shadow(0 0 6px rgba(200,48,48,.7));":""}">${icon}<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0"><div style="display:flex;align-items:center;gap:5px"><div class="hp-bar-track" style="${glow}"><div class="hp-bar-fill" style="width:${pct}%;background:${barCol}"></div></div><span style="font-size:10px;color:#cc8888;font-family:monospace;font-weight:bold;min-width:20px;text-align:right">${hp}</span></div></div></div>`;
+  return`<div id="${id}" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:${tgt?"pointer":"default"};${tgt?"filter:drop-shadow(0 0 6px rgba(200,48,48,.7));":""}">${icon}<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0"><div style="display:flex;align-items:center;gap:5px"><div class="hp-bar-track" style="${glow}">
+    <div class="hp-bar-lag" id="lag-${id}" style="width:${lagPct}%;transition:width 1.2s cubic-bezier(.1,.5,.3,1)"></div>
+    <div class="hp-bar-fill" id="fill-${id}" style="width:${pct}%;background:${barCol}"></div>
+  </div><span style="font-size:10px;color:#cc8888;font-family:monospace;font-weight:bold;min-width:20px;text-align:right">${hp}</span></div></div></div>`;
 }
 // Fix 8: 3D diamond gem mana display
 const hFan=(hand,selIdx,mana,lastDraws)=>{
@@ -631,11 +651,51 @@ function hCardZoom(c){
   ${isM?svgTri(c.atk,"#d86018",19,19,9)+atkLbl+svgDrop(c.hp,"#c22828","#ffe8e8",17,19,9)+hpLbl:`<div class="cdesc">${c.desc||""}</div>`}
 </div>`;
 }
-function showZoom(idx){if(!GAME)return;const c=GAME.player.hand[idx];if(!c)return;_showZoomEl(hCardZoom(c));}
-function showZoomCard(c){if(!c)return;_showZoomEl(hCardZoom(c));}
-function showZoomMinion(m){if(!m)return;_showZoomEl(hCardZoom(m));}
-function _showZoomEl(html){hideZoom();const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=html;ov.onclick=()=>ov.remove();document.body.appendChild(ov);}
-function hideZoom(){const z=document.getElementById("zoom-overlay");if(z)z.remove();}
+function showZoom(idx){
+  if(!GAME)return;const hand=GAME.player.hand;if(!hand||!hand[idx])return;
+  zoomCardIdx=idx;_showZoomEl(hCardZoom(hand[idx]),true);
+}
+function showZoomCard(c){if(!c)return;zoomCardIdx=-1;_showZoomEl(hCardZoom(c),false);}
+function showZoomMinion(m){if(!m)return;zoomCardIdx=-1;_showZoomEl(hCardZoom(m),false);}
+
+let _zoomSwipeHandler=null;
+function _showZoomEl(html,swipeable){
+  hideZoom();
+  const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=html;
+  if(swipeable){
+    // Listen on document so we catch moves even if touch started on the hand-wrap
+    let sx=null;
+    _zoomSwipeHandler=(e)=>{
+      if(!document.getElementById("zoom-overlay"))return;
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      if(sx===null){sx=cx;return;}
+      const dx=cx-sx;
+      if(Math.abs(dx)>32){
+        const dir=dx<0?1:-1; // swipe left → next card (higher index)
+        const hand=GAME&&GAME.player.hand;
+        if(hand){
+          const ni=Math.max(0,Math.min(hand.length-1,zoomCardIdx+dir));
+          if(ni!==zoomCardIdx){sx=cx;showZoom(ni);return;}
+        }
+        sx=cx;
+      }
+    };
+    // Also initialise sx from the drag startX if available
+    if(drag.active)sx=drag.startX;
+    document.addEventListener("touchmove",_zoomSwipeHandler,{passive:true});
+    if(GAME&&GAME.player.hand.length>1){
+      const h=document.createElement("div");
+      h.id="zoom-hint";h.style.cssText="position:fixed;bottom:calc(50% - 190px);left:0;right:0;text-align:center;font-size:11px;color:rgba(255,200,80,.65);font-family:monospace;letter-spacing:1px;pointer-events:none;z-index:901";
+      h.textContent="← 左右滑動切換手牌 →";document.body.appendChild(h);
+    }
+  }else{ov.onclick=()=>hideZoom();}
+  document.body.appendChild(ov);
+}
+function hideZoom(){
+  const z=document.getElementById("zoom-overlay");if(z)z.remove();
+  const h=document.getElementById("zoom-hint");if(h)h.remove();
+  if(_zoomSwipeHandler){document.removeEventListener("touchmove",_zoomSwipeHandler);_zoomSwipeHandler=null;}
+}
 
 // ── TOAST ──────────────────────────────
 function toast(msg,type="warn"){const o=document.getElementById("sc-toast");if(o)o.remove();const el=document.createElement("div");el.id="sc-toast";el.className=type;el.textContent=msg;document.body.appendChild(el);setTimeout(()=>{if(document.getElementById("sc-toast")===el)el.remove();},2200);}
@@ -681,7 +741,37 @@ function flyCardToDeck(cardEl){
   setTimeout(()=>clone.remove(),340);
 }
 
-// ── BUILD DECK ────────────────────────
+// Update lag bars after render — if HP dropped, delay lag bar to create trailing effect
+function updateLagBars(){
+  if(!GAME)return;
+  ['player','ai'].forEach(who=>{
+    const id=who==="player"?"ph":"ah";
+    const curHp=GAME[who].hp;
+    if(lagHp[who]>curHp){
+      // Lag bar stays at old value, then slowly catches up after 400ms delay
+      const lagEl=document.getElementById("lag-"+id);
+      if(lagEl){
+        const oldPct=Math.max(0,lagHp[who]/50*100);
+        lagEl.style.transition="none";
+        lagEl.style.width=oldPct+"%";
+        void lagEl.offsetWidth;
+        setTimeout(()=>{
+          const lagEl2=document.getElementById("lag-"+id);
+          if(lagEl2){
+            lagEl2.style.transition="width 1.2s cubic-bezier(.1,.5,.3,1)";
+            lagEl2.style.width=Math.max(0,curHp/50*100)+"%";
+          }
+        },420);
+        lagHp[who]=curHp;
+      }
+    }else if(lagHp[who]!==curHp){
+      // Healed — snap lag bar up immediately
+      const lagEl=document.getElementById("lag-"+id);
+      if(lagEl){lagEl.style.transition="none";lagEl.style.width=Math.max(0,curHp/50*100)+"%";}
+      lagHp[who]=curHp;
+    }
+  });
+}
 function showDeck(){deckEdit=[...DECK];buildDeck();}
 function buildDeck(){
   const cnt=id=>deckEdit.filter(x=>x===id).length,tot=deckEdit.length;
@@ -1041,6 +1131,13 @@ function onMove(e){
   const dragCard=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
   const threshold=drag.type==="board"?10:dragCard&&dragCard.type!=="minion"?22:50;
   if(!drag.dragging&&dist>threshold){
+    // If zoom was triggered: block HORIZONTAL drag (swiping in zoom), allow VERTICAL (upward cast)
+    if(drag.wasLP){
+      const isVertical=Math.abs(p.y-drag.startY)>Math.abs(p.x-drag.startX)*1.5;
+      if(!isVertical)return; // horizontal swipe → let zoom handle it
+      // Vertical drag past wasLP: close zoom and start drag
+      hideZoom();
+    }
     clearLP();const g=GAME;if(!g)return;
     if(drag.type==="hand"){
       const card=g.player.hand[drag.cardIdx];if(!card)return;
@@ -1413,7 +1510,7 @@ let _lastTurn=null;
 function render(){
   if(SCR==="menu")showMenu();
   else if(SCR==="deck")showDeck();
-  else if(SCR==="battle"&&GAME)showBattle();
+  else if(SCR==="battle"&&GAME){showBattle();requestAnimationFrame(()=>updateLagBars());}
   if(GAME&&!GAME.over&&GAME.turn==="player"&&_lastTurn!=="player"){setTimeout(()=>toast("你的回合！","ok"),90);}
   _lastTurn=GAME?.turn??null;
   if(GAME&&(GAME.lastDraws?.length||GAME.aiNewCard)){
