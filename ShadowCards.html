@@ -8,8 +8,22 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 body{background:#070707;color:#e8e4d8;font-family:Georgia,serif;overflow:hidden;height:100vh;touch-action:none}
 #root{width:100vw;height:100vh;display:flex;flex-direction:column}
-button{font-family:Georgia,serif;cursor:pointer;position:relative;transition:transform .08s,box-shadow .08s,filter .08s;box-shadow:0 3px 0 rgba(0,0,0,.55),0 4px 8px rgba(0,0,0,.4);border-radius:3px}
-button:active{transform:translateY(2px)!important;box-shadow:0 1px 0 rgba(0,0,0,.55),0 2px 4px rgba(0,0,0,.3)!important;filter:brightness(.88)}
+button{font-family:Georgia,serif;cursor:pointer;position:relative;transition:transform .08s,box-shadow .08s,filter .08s;border-radius:4px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.18) inset,   /* top inner highlight */
+    0 -1px 0 rgba(0,0,0,.3) inset,          /* bottom inner shadow */
+    0 4px 0 rgba(0,0,0,.6),                  /* bottom raised edge */
+    0 5px 10px rgba(0,0,0,.45);              /* ambient shadow */
+}
+button:active{
+  transform:translateY(3px)!important;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.1) inset,
+    0 -1px 0 rgba(0,0,0,.3) inset,
+    0 1px 0 rgba(0,0,0,.5),
+    0 2px 4px rgba(0,0,0,.3)!important;
+  filter:brightness(.85);
+}
 
 /* ── CARD ── */
 .card{width:82px;height:112px;background:#f4f0e8;border:1px solid #222;border-radius:6px;position:relative;overflow:hidden;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.55)}
