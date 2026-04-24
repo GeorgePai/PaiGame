@@ -1195,21 +1195,28 @@ const PROX=160,READY=78;
 function updateProxArrow(fx,fy){
   const ts=[];
   if(drag.type==="hand"){const card=GAME&&GAME.player.hand[drag.cardIdx];if(!card||card.type==="minion")return;}
-  document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
-  // Use the full hp-bar-row as hero target (much larger hit area than just #ah icon)
+  // Fix 1: arrow tip near bottom edge of minion card
+  document.querySelectorAll(".em").forEach(em=>{
+    const r=em.getBoundingClientRect();
+    const idx=+em.dataset.ei;
+    const mName=GAME&&GAME.ai.board[idx]?GAME.ai.board[idx].name:"";
+    ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height*0.88,label:mName});
+  });
+  // HP bar: trigger near bottom edge; Fix 2: circle aligned to bar center
   const hpTop=document.querySelector(".hp-bar-row.top");
   if(hpTop){
     const r=hpTop.getBoundingClientRect();
-    // Fix 1: use full row — center x, but snap y to row center so proximity works for full row height
-    ts.push({el:hpTop,x:r.left+r.width/2,y:r.top+r.height/2,yMin:r.top-20,yMax:r.bottom+20});
+    ts.push({el:hpTop,x:r.left+r.width/2,y:r.bottom,
+      yMin:r.bottom-10,yMax:r.bottom+70,
+      circleY:r.top+r.height/2,circleR:r.height/2+2, // Fix 2: circle matches bar height
+      label:"敵方本體"});
   }
   document.querySelectorAll(".drop-ready").forEach(e=>e.classList.remove("drop-ready"));
   ts.forEach(t=>{
-    // Only simplify distance for hp-bar-row when finger is ACTUALLY within its y range
     if(t.yMin!=null&&fy>=t.yMin&&fy<=t.yMax){
-      t.dist=Math.abs(t.x-fx)*0.5; // finger in row height → horizontal dist only
+      t.dist=Math.abs(t.x-fx)*0.5;
     }else{
-      t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2); // normal euclidean
+      t.dist=Math.sqrt((t.x-fx)**2+(t.y-fy)**2);
     }
   });
   const best=ts.filter(t=>t.dist<PROX).sort((a,b)=>a.dist-b.dist)[0];
@@ -1218,7 +1225,6 @@ function updateProxArrow(fx,fy){
   const{x:tx,y:ty,dist}=best,rdy=dist<READY;
   if(rdy){
     best.el.classList.add("drop-ready");
-    // Also glow the hp-bar-row if it's the hero target
     if(best.el.classList.contains("hp-bar-row")){
       best.el.style.filter="drop-shadow(0 0 18px rgba(255,148,42,.95)) drop-shadow(0 0 8px rgba(255,148,42,.6))";
       best.el.style.animation="rdyPulse .48s ease-in-out infinite";
@@ -1226,26 +1232,30 @@ function updateProxArrow(fx,fy){
   }
   const col=rdy?"rgba(255,168,48,1)":"rgba(195,78,14,.92)";
   const colFade=rdy?"rgba(255,148,38,.28)":"rgba(145,55,8,.2)";
-  const cx=(fx+tx)/2-((ty-fy)*.14),cy=(fy+ty)/2+((tx-fx)*.14);
+  const bcx=(fx+tx)/2-((ty-fy)*.14),bcy=(fy+ty)/2+((tx-fx)*.14);
   const gid="garw";
+  // Fix 2: circle uses circleY/circleR if defined (HP bar), else default
+  const circY=best.circleY??ty,circR=best.circleR??22;
+  // Fix 3: target label near arrow tip when ready
+  const lbl=rdy&&best.label?`<text x="${tx}" y="${circY-(circR+8)}" text-anchor="middle" fill="${col}" font-size="11" font-family="monospace" font-weight="bold" style="text-shadow:0 1px 3px rgba(0,0,0,.9)">${best.label}</text>`:""
   arrowEl.innerHTML=`<svg width="100%" height="100%" overflow="visible" style="position:absolute;inset:0">
     <defs>
       <linearGradient id="${gid}" x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" gradientUnits="userSpaceOnUse">
         <stop offset="0%" stop-color="${colFade}"/>
         <stop offset="100%" stop-color="${col}"/>
       </linearGradient>
-      <marker id="arh-bg" markerWidth="3.5" markerHeight="3" refX="3.2" refY="1.5" orient="auto">
-        <polygon points="0 0,3.5 1.5,0 3" fill="rgba(0,0,0,.85)"/>
+      <marker id="arh-bg" markerWidth="4.5" markerHeight="3.6" refX="0" refY="1.8" orient="auto">
+        <polygon points="0 0,4.5 1.8,0 3.6" fill="rgba(0,0,0,.85)"/>
       </marker>
-      <marker id="arh" markerWidth="3.5" markerHeight="3" refX="3.2" refY="1.5" orient="auto">
-        <polygon points="0 0,3.5 1.5,0 3" fill="${col}"/>
+      <marker id="arh" markerWidth="4.5" markerHeight="3.6" refX="0" refY="1.8" orient="auto">
+        <polygon points="0 0,4.5 1.8,0 3.6" fill="${col}"/>
       </marker>
     </defs>
-    <path d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
-      stroke="rgba(0,0,0,.75)" stroke-width="5.5" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
-    <path class="arrow-march" d="M${fx},${fy} Q${cx},${cy} ${tx},${ty}"
-      stroke="url(#${gid})" stroke-width="3.5" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
-    ${rdy?`<circle cx="${tx}" cy="${ty}" r="24" fill="rgba(255,148,38,.1)" stroke="${col}" stroke-width="1.6"/>`:""}
+    <path d="M${fx},${fy} Q${bcx},${bcy} ${tx},${ty}"
+      stroke="rgba(0,0,0,.75)" stroke-width="6.5" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
+    <path class="arrow-march" d="M${fx},${fy} Q${bcx},${bcy} ${tx},${ty}"
+      stroke="url(#${gid})" stroke-width="4.5" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
+    ${rdy?`<rect x="${tx-circR}" y="${circY-circR}" width="${circR*2}" height="${circR*2}" rx="${circR}" fill="rgba(255,148,38,.08)" stroke="${col}" stroke-width="1.6"/>${lbl}`:""}
   </svg>`;
 }
 function hideArrow(){
@@ -1257,9 +1267,9 @@ function hideArrow(){
 }
 function closestTarget(fx,fy){
   const ts=[];
-  document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height/2});});
+  document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height*0.88});});
   const hpTop=document.querySelector(".hp-bar-row.top");
-  if(hpTop){const r=hpTop.getBoundingClientRect();ts.push({el:hpTop,x:r.left+r.width/2,y:r.top+r.height/2,yMin:r.top-20,yMax:r.bottom+20});}
+  if(hpTop){const r=hpTop.getBoundingClientRect();ts.push({el:hpTop,x:r.left+r.width/2,y:r.bottom,yMin:r.bottom-10,yMax:r.bottom+70});}
   let best=null,md=Infinity;
   ts.forEach(t=>{
     let d;
