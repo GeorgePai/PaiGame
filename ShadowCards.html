@@ -1146,8 +1146,9 @@ function updateLagBars(){
           if(l){l.style.transition="width 1.2s cubic-bezier(.1,.5,.3,1)";l.style.width=newPct+"%";}
         },420);
       }
-      // Shake in sync with bar animation (not delayed)
-      shakeHpBar(who);
+      // Shake in exact sync with bar animation start
+      const row=fillEl.closest(".hp-bar-row");
+      if(row){row.classList.remove("shake");row.classList.add("shake");setTimeout(()=>row.classList.remove("shake"),460);}
       lagHp[who]=curHp;
     }else if(lagHp[who]!==curHp){
       const newPct=Math.max(0,curHp/50*100);
