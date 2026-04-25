@@ -124,6 +124,7 @@ button:active{
   animation:rdyPulse .48s ease-in-out infinite;
   outline:none;
 }
+.em.drop-ready .mn,.em.drop-hi .mn{visibility:hidden}
 
 /* ── LAYOUT ── */
 .topbar,.botbar{flex-shrink:0;padding:5px 14px;display:flex;align-items:center;gap:10px;background:#0d0d0d;position:relative;z-index:2}
@@ -1753,7 +1754,9 @@ function updateProxArrow(fx,fy){
     const r=em.getBoundingClientRect();
     const idx=+em.dataset.ei;
     const mName=GAME&&GAME.ai.board[idx]?GAME.ai.board[idx].name:"";
-    ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height*0.88,label:mName});
+    const minionEl=em.querySelector(".minion");
+    const my=minionEl?minionEl.getBoundingClientRect().bottom:r.bottom;
+    ts.push({el:em,x:r.left+r.width/2,y:my,label:mName});
   });
   // HP bar: trigger near bottom edge; Fix 2: circle aligned to bar center
   const hpTop=document.querySelector(".hp-bar-row.top");
@@ -1808,7 +1811,7 @@ function updateProxArrow(fx,fy){
       stroke="rgba(0,0,0,.75)" stroke-width="6.5" fill="none" stroke-linecap="round" marker-end="url(#arh-bg)"/>
     <path class="arrow-march" d="M${fx},${fy} Q${bcx},${bcy} ${tx},${ty}"
       stroke="url(#${gid})" stroke-width="4.5" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
-    ${rdy?`<rect x="${tx-circR}" y="${circY-circR}" width="${circR*2}" height="${circR*2}" rx="${circR}" fill="rgba(255,148,38,.08)" stroke="${col}" stroke-width="1.6"/>${lbl}`:""}
+    ${rdy?"":""}
   </svg>`;
 }
 function hideArrow(){
@@ -1820,7 +1823,7 @@ function hideArrow(){
 }
 function closestTarget(fx,fy){
   const ts=[];
-  document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();ts.push({el:em,x:r.left+r.width/2,y:r.top+r.height*0.88});});
+  document.querySelectorAll(".em").forEach(em=>{const r=em.getBoundingClientRect();const mEl=em.querySelector(".minion");const my=mEl?mEl.getBoundingClientRect().bottom:r.bottom;ts.push({el:em,x:r.left+r.width/2,y:my});});
   const hpTop=document.querySelector(".hp-bar-row.top");
   if(hpTop){const r=hpTop.getBoundingClientRect();ts.push({el:hpTop,x:r.left+r.width/2,y:r.bottom,yMin:r.bottom-10,yMax:r.bottom+70});}
   let best=null,md=Infinity;
