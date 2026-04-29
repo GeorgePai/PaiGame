@@ -398,6 +398,35 @@ const Audio={
     this._noise(t,.08,vol*.5,900,50);
     if(tier>=3)this._osc("sawtooth",freq*.7,t,.1,vol*.4);
   },
+  sfxCharSelect0(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",440,t,.08,.25);this._osc("sine",550,t+.06,.06,.18);
+  },
+  sfxCharSelect1(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sawtooth",220,t,.1,.3);this._noise(t,.05,.25,1200,200);
+  },
+  sfxCharSelect2(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    const o=this.ctx.createOscillator();const a=this.ctx.createGain();
+    o.type="sine";o.frequency.setValueAtTime(600,t);o.frequency.exponentialRampToValueAtTime(200,t+.2);
+    a.gain.setValueAtTime(.35,t);a.gain.exponentialRampToValueAtTime(.001,t+.22);
+    o.connect(a);a.connect(this.sfxGain);o.start(t);o.stop(t+.24);
+    this._osc("triangle",300,t,.08,.2);
+  },
+  sfxCharSelect3(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    this._osc("sine",80,t,.2,.6);this._osc("square",60,t,.15,.4);this._noise(t,.08,.4,400,30);
+    this._osc("sawtooth",120,t+.05,.12,.25);
+  },
+  sfxCharSelect4(){
+    if(!this.ctx)return;const t=this.ctx.currentTime;
+    // Deep rumble + metallic crash + high shriek
+    this._osc("sine",40,t,.35,.8);this._osc("sine",55,t,.3,.6);
+    this._noise(t,.12,.6,2000,20);
+    this._osc("sawtooth",180,t,.2,.45);this._osc("sawtooth",90,t+.05,.25,.5);
+    [0,.06,.12].forEach((d,i)=>this._osc("triangle",[800,600,400][i],t+d,.1,.22));
+  },
   sfxRallyTrigger(){
     if(!this.ctx)return;const t=this.ctx.currentTime;
     this._osc("sine",90,t,.18,.65);this._osc("square",45,t,.1,.4);this._noise(t,.05,.5,500,30);
@@ -1642,7 +1671,7 @@ function showMenu(){
     const cur=i===stage;
     const op=cur?"opacity:1":"opacity:.6";
     const glow=cur?`filter:drop-shadow(0 0 6px ${c.color})`:"";
-    return`<div onclick="window._aiStage=${i};render()" style="display:flex;flex-direction:column;align-items:center;gap:3px;${op};cursor:pointer">
+    return`<div onclick="Audio.sfxCharSelect${i}&&Audio.sfxCharSelect${i}();window._aiStage=${i};render()" style="display:flex;flex-direction:column;align-items:center;gap:3px;${op};cursor:pointer">
       <div style="${glow};transition:filter .2s">${c.svgPortrait}</div>
       <div style="font-size:7px;color:${cur?c.color:"#555"};font-family:monospace;letter-spacing:.3px;text-align:center">${cur?"▶":"—"}</div>
     </div>`;
@@ -1665,9 +1694,15 @@ function showMenu(){
             <div style="font-size:9px;color:#555;font-family:monospace;letter-spacing:.5px;margin:2px 0">${char.title}</div>
           </div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px">
-          <span style="font-size:8px;color:#555;font-family:monospace">HP：${char.hp}</span>
-          <span style="font-size:8px;color:#555;font-family:monospace">難度：${"★".repeat(stage+1)}${"☆".repeat(4-stage)}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid #1a1a1a">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:8px;color:#555;font-family:monospace;letter-spacing:1px">HP</span>
+            <span style="font-size:16px;color:#dd4444;font-family:monospace;font-weight:bold;line-height:1">${char.hp}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+            <span style="font-size:8px;color:#555;font-family:monospace;letter-spacing:1px">難度</span>
+            <span style="font-size:15px;line-height:1;letter-spacing:2px">${"⭐".repeat(stage+1)}${"☆".repeat(4-stage)}</span>
+          </div>
         </div>
       </div>
     </div>`}
