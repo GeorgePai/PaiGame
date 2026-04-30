@@ -874,19 +874,36 @@ const castS=(s0,hi,who,tw,ti)=>{
   return chk(s);
 };
 const atkF=(s0,who,ai,tw,ti)=>{const a=s0[who].board[ai];if(!a||a.sick||a.attacked)return s0;if(ti===-1){let s={...s0,[who]:{...s0[who],board:s0[who].board.map((m,i)=>i===ai?{...m,attacked:true}:m)},[tw]:{...s0[tw],hp:s0[tw].hp-a.atk}};return chk(alog(s,"⚔️"+a.name+"→英雄-"+a.atk));}const d=s0[tw].board[ti];let s={...s0,[who]:{...s0[who],board:s0[who].board.map((m,i)=>i===ai?{...m,attacked:true,curHp:a.curHp-d.atk}:m).filter(m=>m.curHp>0)},[tw]:{...s0[tw],board:s0[tw].board.map((m,i)=>i===ti?{...m,curHp:d.curHp-a.atk}:m).filter(m=>m.curHp>0)}};return chk(alog(s,"⚔️"+a.name+"("+a.atk+")vs"+d.name+"("+d.atk+")"));};
+// ── AI RANDOM DECK POOLS ─────────────────────────────────────────────────────
+const AI_DECKS=[
+  // 0: Aggro — low cost rush
+  ["m01","m01","m02","m02","m03","m03","m04","m04","s01","s01","m05","m05","m06","m06","s02","s03","m07","m07","m08","s04","m09","m09","m10","m10","s05","m11","m12","m13","s06","m14"],
+  // 1: Control — high cost + spells
+  ["s01","s01","s04","s04","s05","s05","s06","s06","s07","s07","s08","s08","m08","m08","m09","m09","m10","m10","m11","m11","m12","m12","m13","m13","m14","m14","m07","m07","s02","s03"],
+  // 2: Midrange — balanced
+  ["m01","m01","s01","s01","m02","m02","m03","m03","m04","m04","s02","s03","m05","m05","m06","m06","s04","m07","m07","m08","m08","s05","m09","m10","m10","m11","s06","m12","m13","m14"],
+  // 3: Taunt/Rally — synergy focused
+  ["m17","m17","m18","m18","m15","m15","m16","m16","m01","m01","m04","m04","m05","m05","s03","s03","m06","m06","m07","m07","m08","m08","m09","m09","m10","m10","s05","m11","m12","m13"],
+  // 4: Spell-heavy mage
+  ["s01","s01","s02","s02","s03","s04","s04","s05","s05","s06","s06","s07","s07","s08","s08","m01","m01","m03","m03","m05","m05","m07","m07","m09","m10","m11","m12","m13","m14","m02"],
+];
+
 const newGame=pdeck=>{
-  const char=AI_CHARS[window._aiStage??0];
-  const aiDeckIds=char.deck;
-  const pd=shuf(pdeck).map(id=>mk(getDef(id))),ad=shuf(aiDeckIds).map(id=>mk(getDef(id)));
+  // Always pick a different deck from last time
+  let aiDeckIdx;
+  const last=window._lastAiDeckIdx??-1;
+  do{ aiDeckIdx=0|Math.random()*AI_DECKS.length; }while(aiDeckIdx===last&&AI_DECKS.length>1);
+  window._lastAiDeckIdx=aiDeckIdx;
+  const aiDeck=AI_DECKS[aiDeckIdx];
+  const pd=shuf(pdeck).map(id=>mk(getDef(id))),ad=shuf(aiDeck).map(id=>mk(getDef(id)));
   const ph=pd.splice(0,2),ah=ad.splice(0,2);
-  let s={player:{hp:50,mana:0,maxMana:0,deck:pd,hand:ph,board:[]},ai:{hp:char.hp,mana:0,maxMana:0,deck:ad,hand:ah,board:[],char},turn:"player",mode:"default",selCard:null,selAtk:null,log:["遊戲開始！你先手。"],over:null,lastDraws:[],aiNewCard:false};
+  let s={player:{hp:50,mana:0,maxMana:0,deck:pd,hand:ph,board:[]},ai:{hp:50,mana:0,maxMana:0,deck:ad,hand:ah,board:[],deckIdx:aiDeckIdx},turn:"player",mode:"default",selCard:null,selAtk:null,log:["遊戲開始！你先手。"],over:null,lastDraws:[],aiNewCard:false};
   return startT(s,"player");
 };
 
 // ── AI SCRIPT SYSTEM ─────────────────
 function computeAiScript(s){
-  const char=s.ai.char||AI_CHARS[0];
-  return char.ai(s);
+  return _buildScript(s,{playOrder:"tauntrally",target:"efficient",spellSmart:true,faceIfClear:true,saveRemoval:true});
 }
 function executeAiScript(script,idx,onDone){
   if(idx>=script.length||GAME.over){onDone();return;}
@@ -1663,57 +1680,22 @@ function buildDeck(){
 // ── MENU ─────────────────────────────
 function showMenu(){
   let deco="";for(let i=0;i<12;i++)deco+=`<div style="position:absolute;left:${(i%4)*25}%;top:${Math.floor(i/4)*33}%;font-size:80px;color:#fff;transform:rotate(${i*30}deg)">◈</div>`;
-  const stage=Math.min(window._aiStage??0,AI_CHARS.length-1);
-  const char=AI_CHARS[stage];
-  // Character selection grid — all freely available
-  const progRow=AI_CHARS.map((c,i)=>{
-    const done=false; // no longer locked
-    const cur=i===stage;
-    const op=cur?"opacity:1":"opacity:.6";
-    const glow=cur?`filter:drop-shadow(0 0 6px ${c.color})`:"";
-    return`<div onclick="Audio.sfxCharSelect${i}&&Audio.sfxCharSelect${i}();window._aiStage=${i};render()" style="display:flex;flex-direction:column;align-items:center;gap:3px;${op};cursor:pointer">
-      <div style="${glow};transition:filter .2s">${c.svgPortrait}</div>
-      <div style="font-size:7px;color:${cur?c.color:"#555"};font-family:monospace;letter-spacing:.3px;text-align:center">${cur?"▶":"—"}</div>
-    </div>`;
-  }).join("");
   R().innerHTML=`<div class="mbg" id="mbg"><div class="deco">${deco}</div>
-    <div style="text-align:center;margin-bottom:28px;position:relative;z-index:1">
+    <div style="text-align:center;margin-bottom:56px;position:relative;z-index:1">
       <div style="font-size:3px;color:#222;letter-spacing:20px;font-family:monospace">▬▬▬▬▬▬▬▬▬</div>
       <div id="menu-title" style="font-size:48px;font-weight:bold;letter-spacing:10px;color:#ede9dc;margin:16px 0 10px">SHADOW CARDS</div>
       <div style="font-size:12px;color:#555;letter-spacing:6px">黑暗卡牌對戰</div>
-      <div style="font-size:3px;color:#222;letter-spacing:20px;font-family:monospace;margin-top:12px">▬▬▬▬▬▬▬▬▬</div>
+      <div style="font-size:3px;color:#222;letter-spacing:20px;font-family:monospace;margin-top:16px">▬▬▬▬▬▬▬▬▬</div>
     </div>
-    ${`<div style="background:rgba(0,0,0,.5);border:1px solid #222;border-radius:8px;padding:12px 14px;width:260px;margin-bottom:16px;position:relative;z-index:1">
-      <div style="font-size:8px;color:#555;letter-spacing:2px;font-family:monospace;margin-bottom:10px;text-align:center">選擇挑戰的對手</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end">${progRow}</div>
-      <div style="margin-top:12px;border-top:1px solid #1a1a1a;padding-top:10px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex-shrink:0">${char.svgPortrait}</div>
-          <div>
-            <div style="font-size:12px;color:${char.color};font-family:monospace;font-weight:bold;letter-spacing:1px">${char.name}</div>
-            <div style="font-size:9px;color:#555;font-family:monospace;letter-spacing:.5px;margin:2px 0">${char.title}</div>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid #1a1a1a">
-          <div style="display:flex;flex-direction:column;gap:2px">
-            <span style="font-size:8px;color:#555;font-family:monospace;letter-spacing:1px">HP</span>
-            <span style="font-size:16px;color:#dd4444;font-family:monospace;font-weight:bold;line-height:1">${char.hp}</span>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-            <span style="font-size:8px;color:#555;font-family:monospace;letter-spacing:1px">難度</span>
-            <span style="font-size:15px;line-height:1;letter-spacing:2px">${"⭐".repeat(stage+1)}${"☆".repeat(4-stage)}</span>
-          </div>
-        </div>
-      </div>
-    </div>`}
     <div style="display:flex;flex-direction:column;gap:14px;width:260px;position:relative;z-index:1">
-      <button id="bs" style="padding:17px 0;background:#ede9dc;color:#0a0a0a;border:none;border-radius:2px;font-size:14px;letter-spacing:4px">⚔  挑戰 ${char.name}</button>
-      <button id="bd" style="padding:17px 0;background:transparent;color:#666;border:1px solid #222;border-radius:2px;font-size:14px;letter-spacing:4px">◈  我的卡牌</button>
+      <button id="bs" style="padding:17px 0;background:#ede9dc;color:#0a0a0a;border:none;border-radius:2px;font-size:14px;letter-spacing:4px">⚔  單人對戰</button>
+      <button id="bm" style="padding:17px 0;background:transparent;color:#666;border:1px solid #333;border-radius:2px;font-size:14px;letter-spacing:4px">⚡  多人對戰</button>
+      <button id="bd" style="padding:17px 0;background:transparent;color:#555;border:1px solid #1a1a1a;border-radius:2px;font-size:14px;letter-spacing:4px">◈  我的卡牌</button>
     </div>
     <div style="position:absolute;bottom:24px;font-size:10px;color:#222;letter-spacing:4px;font-family:monospace;z-index:1">${CARDS.length} CARDS IN COLLECTION</div>
   </div>`;
-  const bsEl=document.getElementById("bs");
-  if(bsEl)bsEl.onclick=()=>{Audio.sfxClick();GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
+  document.getElementById("bs").onclick=()=>{Audio.sfxClick();GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
+  document.getElementById("bm").onclick=()=>{Audio.sfxClick();toast("多人對戰功能正在開發中，敬請期待！","ok");};
   document.getElementById("bd").onclick=()=>{Audio.sfxClick();SCR="deck";stopFireflies();render();};
 
   // Purple title glow — slow breathing ~3s cycle
@@ -1740,16 +1722,16 @@ function showBattle(){
     const viewDeckBtn=document.getElementById("view-ai-deck");
     if(viewDeckBtn)viewDeckBtn.onclick=()=>{
       Audio.sfxClick();
-      const char=GAME.ai.char||AI_CHARS[0];
-      const deckDefs=char.deck.map(id=>getDef(id)).filter(Boolean);
+      const deckIdx=GAME.ai.deckIdx??0;
+      const deckDefs=AI_DECKS[deckIdx].map(id=>getDef(id)).filter(Boolean);
+      const deckNames=["急攻型","控制型","均衡型","仇恨戰吼型","法術型"];
       const counts={};deckDefs.forEach(c=>{counts[c.id]=(counts[c.id]||0)+1;});
       const uniq=Object.keys(counts).map(id=>getDef(id)).filter(Boolean).sort((a,b)=>a.cost-b.cost);
       const ov=document.createElement("div");
       ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:900;overflow-y:auto;padding:16px;box-sizing:border-box";
       ov.innerHTML=`<div style="max-width:360px;margin:0 auto">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-          ${char.svgPortrait}
-          <div><div style="font-size:14px;color:${char.color};font-family:monospace;font-weight:bold">${char.name}的牌組</div><div style="font-size:9px;color:#555;font-family:monospace">${char.title} · ${deckDefs.length}張</div></div>
+          <div><div style="font-size:14px;color:#c8a832;font-family:monospace;font-weight:bold">對手牌組</div><div style="font-size:9px;color:#555;font-family:monospace">${deckNames[deckIdx]||"未知"} · ${deckDefs.length}張</div></div>
           <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-left:auto;padding:5px 12px;background:#111;border:1px solid #333;color:#888;font-size:11px;border-radius:3px">✕</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -1838,8 +1820,8 @@ function showBattle(){
     <!-- ══ END PIXEL JUNGLE ══ -->
     <div class="topbar">
       <div style="display:flex;flex-direction:column;gap:1px">
-        <div style="font-size:8px;color:${(GAME.ai.char||AI_CHARS[0]).color};font-family:monospace;letter-spacing:1px;font-weight:bold">${(GAME.ai.char||AI_CHARS[0]).name}</div>
-        <div style="font-size:8px;color:#666;letter-spacing:.5px">對手本回合魔力</div>
+        <div style="font-size:8px;color:#888;font-family:monospace;letter-spacing:1px">對手</div>
+        <div style="font-size:8px;color:#666;letter-spacing:.5px">本回合魔力</div>
       </div>
       ${hMana(ai.mana,ai.maxMana)}
       <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
