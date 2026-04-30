@@ -1015,6 +1015,7 @@ function db(){if(!_fb){if(!firebase.apps.length)firebase.initializeApp(FIREBASE_
 
 let MP=null; // {role:"host"|"guest", roomCode, deckIds}
 let MP_DECK=null; // selected deck ids for MP
+let guestUI={selAtk:null,selCard:null,mode:"default"}; // local UI state for guest (not synced)
 
 const MP_DECKS=[
   {name:"均衡型",  ids:["m01","m01","s01","s01","m02","m02","m03","m03","m04","m04","s02","s03","m05","m05","m06","m06","s04","m07","m07","m08","m08","s05","m09","m10","m10","m11","s06","m12","m13","m14"]},
@@ -1089,9 +1090,12 @@ function mpApplyGuestAction(a){
     },120);
   }
   else if(a.t==="SPELL_TGT"){
-    // Guest targeted spell: a.ci=cardIdx, a.tw=guest-perspective team, a.ti=target idx
+    // Guest targeted spell: a.ci=cardIdx in guest's hand (=GAME.ai.hand)
+    // a.tw="ai" means guest's enemy (=server's player), a.tw="player" means guest's own (=server's ai)
     const realTw=a.tw==="ai"?"player":"ai";
-    ng={...castS(g,a.ci,"ai",realTw,a.ti)};
+    const ci=a.ci;
+    const c=(GAME.ai.hand||[])[ci];if(!c)return;
+    ng={...castS(g,ci,"ai",realTw,a.ti)};
   }
   else if(a.t==="ET"){
     ng={...startT({...g,turn:"ai",mode:"default",selCard:null,selAtk:null},"player")};
@@ -1255,6 +1259,7 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
     db().ref(`rooms/${code}/game`).on("value",snap=>{
       const v=snap.val();if(!v)return;
       GAME=JSON.parse(v);
+      guestUI={selAtk:null,selCard:null,mode:"default"}; // reset UI on new state
       render();
     });
   }
@@ -1978,11 +1983,11 @@ function stopFireflies(){if(window._menuCleanup)window._menuCleanup();}
 
 // ── SHOW BATTLE ───────────────────────
 function showBattle(){
-  // MP Guest: flip game perspective so guest sees themselves at bottom
-  const g=(MP&&MP.role==="guest")?mpFlip(GAME):GAME;
-  if(!g)return;
+  // MP Guest: flip game + inject local UI state for rendering
+  const rawG=(MP&&MP.role==="guest")?mpFlip(GAME):GAME;
+  if(!rawG)return;
+  const g=(MP&&MP.role==="guest")?{...rawG,selAtk:guestUI.selAtk,selCard:guestUI.selCard,mode:guestUI.mode}:rawG;
   const{player:pl,ai,turn,mode,selCard,selAtk,log,over,lastDraws,aiNewCard}=g;
-  // isP: true when it's the local player's turn
   const localTurn=MP?.role==="guest"?(GAME.turn==="ai"):(turn==="player");
   const isP=localTurn&&!over&&!animLock,canTgt=mode==="attacking";
   // Wire AI deck viewer button
@@ -2549,8 +2554,71 @@ function doPlayerAtk(bi,tw,ti){
 
 // ── DISPATCH ──────────────────────────
 function act(a,fromNetwork=false){
-  // MP Guest: forward action to Firebase instead of running locally
-  if(MP&&MP.role==="guest"&&!fromNetwork){mpGuestAct(a);return;}
+  // ── MP Guest: manage local UI state; only send real actions to Firebase ──
+  if(MP&&MP.role==="guest"&&!fromNetwork){
+    const flipped=mpFlip(GAME)||{};
+    const fpl=flipped.player||{};
+    const fai=flipped.ai||{};
+
+    if(a.t==="OM"){
+      // Select/deselect own minion for attack
+      const m=(fpl.board||[])[a.i];
+      if(!m){guestUI={selAtk:null,selCard:null,mode:"default"};render();return;}
+      if(m.sick){toast("召喚後本回合不能攻擊","warn");return;}
+      if(m.attacked){toast("此隨從本回合已行動","warn");return;}
+      guestUI=guestUI.selAtk===a.i
+        ?{selAtk:null,selCard:null,mode:"default"}
+        :{selAtk:a.i,selCard:null,mode:"attacking"};
+      render();return;
+    }
+    if(a.t==="HC"){
+      // If spell that needs targeting: just update local selection
+      const c=(fpl.hand||[])[a.i];
+      if(!c)return;
+      if(c.type==="spell"&&c.effect!=="draw"&&c.effect!=="heal"&&c.effect!=="aoe"&&c.effect!=="random_destroy"){
+        guestUI=guestUI.selCard===a.i
+          ?{selAtk:null,selCard:null,mode:"default"}
+          :{selAtk:null,selCard:a.i,mode:"targeting"};
+        render();return;
+      }
+      // Self-cast spell or minion: send to Firebase directly
+      mpGuestAct(a);guestUI={selAtk:null,selCard:null,mode:"default"};return;
+    }
+    if(a.t==="HC_AT"){mpGuestAct(a);guestUI={selAtk:null,selCard:null,mode:"default"};return;}
+    if(a.t==="EM"){
+      if(guestUI.mode==="attacking"&&guestUI.selAtk!=null){
+        mpGuestAct({t:"BOARD_ATK",bi:guestUI.selAtk,tw:"ai",ti:a.i});
+      }else if(guestUI.mode==="targeting"&&guestUI.selCard!=null){
+        mpGuestAct({t:"SPELL_TGT",ci:guestUI.selCard,tw:"ai",ti:a.i});
+      }
+      guestUI={selAtk:null,selCard:null,mode:"default"};return;
+    }
+    if(a.t==="EH"){
+      if(guestUI.mode==="attacking"&&guestUI.selAtk!=null){
+        mpGuestAct({t:"BOARD_ATK",bi:guestUI.selAtk,tw:"ai",ti:-1});
+      }else if(guestUI.mode==="targeting"&&guestUI.selCard!=null){
+        mpGuestAct({t:"SPELL_TGT",ci:guestUI.selCard,tw:"ai",ti:-1});
+      }
+      guestUI={selAtk:null,selCard:null,mode:"default"};return;
+    }
+    if(a.t==="PM"){
+      if(guestUI.mode==="targeting"&&guestUI.selCard!=null){
+        // Guest targeting own minion (e.g. heal) — own board in flipped view = server's ai board
+        mpGuestAct({t:"SPELL_TGT",ci:guestUI.selCard,tw:"player",ti:a.i});
+      }
+      guestUI={selAtk:null,selCard:null,mode:"default"};return;
+    }
+    if(a.t==="PH"){
+      if(guestUI.mode==="targeting"&&guestUI.selCard!=null){
+        mpGuestAct({t:"SPELL_TGT",ci:guestUI.selCard,tw:"player",ti:-1});
+      }
+      guestUI={selAtk:null,selCard:null,mode:"default"};return;
+    }
+    if(a.t==="CL"){guestUI={selAtk:null,selCard:null,mode:"default"};render();return;}
+    if(a.t==="ET"){mpGuestAct({t:"ET"});guestUI={selAtk:null,selCard:null,mode:"default"};return;}
+    // Fallback: send anything else directly
+    mpGuestAct(a);return;
+  }
   if(!GAME||GAME.over||GAME.turn!=="player"||animLock)return;const g=GAME;
   if(a.t==="EA"){
     // Fix 8: all-target damage
