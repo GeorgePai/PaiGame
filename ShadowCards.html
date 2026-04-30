@@ -4,7 +4,10 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Shadow Cards</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 body{background:#070707;color:#e8e4d8;font-family:Georgia,serif;overflow:hidden;height:100vh;touch-action:none}
 #root{width:100vw;height:100vh;display:flex;flex-direction:column}
@@ -1004,6 +1007,266 @@ function executeAiScript(script,idx,onDone){
 let SCR="menu",DECK=[...DEF_DECK],GAME=null,aiRunning=false,logOpen=false,animLock=false;
 let deckEdit=[...DEF_DECK];
 if(!window._aiStage)window._aiStage=0;
+
+// ══ MULTIPLAYER ENGINE ════════════════════════════════════════════════════════
+const FIREBASE_CFG={apiKey:"AIzaSyDaMkDm2G-4xYZbfPELXIuYiUXIGJI7c9E",authDomain:"paigame.firebaseapp.com",databaseURL:"https://paigame-default-rtdb.firebaseio.com",projectId:"paigame",storageBucket:"paigame.firebasestorage.app",messagingSenderId:"402951779833",appId:"1:402951779833:web:14ca7cfe3ee6495f5e7928"};
+let _fb=null;
+function db(){if(!_fb){if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CFG);_fb=firebase.database();}return _fb;}
+
+let MP=null; // {role:"host"|"guest", roomCode, deckIds}
+let MP_DECK=null; // selected deck ids for MP
+
+const MP_DECKS=[
+  {name:"均衡型",  ids:["m01","m01","s01","s01","m02","m02","m03","m03","m04","m04","s02","s03","m05","m05","m06","m06","s04","m07","m07","m08","m08","s05","m09","m10","m10","m11","s06","m12","m13","m14"]},
+  {name:"急攻型",  ids:["m01","m01","m02","m02","m03","m03","m04","m04","s01","s01","m05","m05","m06","m06","s02","s03","m07","m07","m08","s04","m09","m09","m10","m10","s05","m11","m12","m13","s06","m14"]},
+  {name:"控制型",  ids:["s01","s01","s04","s04","s05","s05","s06","s06","s07","s07","s08","s08","m08","m08","m09","m09","m10","m10","m11","m11","m12","m12","m13","m13","m14","m14","m07","m07","s02","s03"]},
+  {name:"仇恨戰吼",ids:["m17","m17","m18","m18","m15","m15","m16","m16","m01","m01","m04","m04","m05","m05","s03","s03","m06","m06","m07","m07","m08","m08","m09","m09","m10","m10","s05","m11","m12","m13"]},
+];
+
+function genCode(){const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";for(let i=0;i<5;i++)s+=c[0|Math.random()*c.length];return s;}
+
+function mpCleanup(){
+  try{if(MP?.roomCode){db().ref(`rooms/${MP.roomCode}/guestAction`).off();db().ref(`rooms/${MP.roomCode}/game`).off();db().ref(`rooms/${MP.roomCode}/status`).off();}}catch(e){}
+  if(window._lobbyRef){try{window._lobbyRef.off();}catch(e){}window._lobbyRef=null;}
+  MP=null;
+}
+
+// Guest perspective: swap player/ai for display
+function mpFlip(g){
+  if(!g)return g;
+  const turn=g.turn==="player"?"ai":"player";
+  return{...g,player:{...g.ai},ai:{...g.player},turn,selCard:null,selAtk:null,mode:turn==="player"?"default":g.mode};
+}
+
+// Host applies guest's action to the AI side of GAME
+function mpApplyGuestAction(a){
+  if(!GAME||GAME.turn!=="ai")return;
+  const g=GAME;
+  let ng=null;
+
+  if(a.t==="HC"){
+    const c=g.ai.hand[a.i];if(!c||c.cost>g.ai.mana)return;
+    if(c.type==="minion"){
+      if(g.ai.board.length>=7)return;
+      const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};
+      let board=[...g.ai.board,mn];
+      if(c.effect==="rally")board=board.map(m=>({...m,atk:m.atk+1,atkBuff:(m.atkBuff||0)+1}));
+      ng={...g,ai:{...g.ai,mana:g.ai.mana-c.cost,hand:g.ai.hand.filter((_,i)=>i!==a.i),board}};
+    }else if(c.effect==="draw"||c.effect==="heal"||c.effect==="aoe"||c.effect==="random_destroy"){
+      const tw=c.effect==="aoe"?"player":"ai";
+      const ti=c.effect==="aoe"?-2:-1;
+      ng={...castS(g,a.i,"ai",tw,ti)};
+    }else{
+      // Targeted spell — guest will send a follow-up SPELL_TGT action
+      ng={...g,ai:{...g.ai},_guestSpellIdx:a.i};
+    }
+  }
+  else if(a.t==="HC_AT"){
+    const c=g.ai.hand[a.i];if(!c||c.cost>g.ai.mana||c.type!=="minion"||g.ai.board.length>=7)return;
+    const slot=Math.min(Math.max(0,a.slot??g.ai.board.length),g.ai.board.length);
+    const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};
+    const board=[...g.ai.board];board.splice(slot,0,mn);
+    let nb=[...board];if(c.effect==="rally")nb=nb.map(m=>({...m,atk:m.atk+1,atkBuff:(m.atkBuff||0)+1}));
+    ng={...g,ai:{...g.ai,mana:g.ai.mana-c.cost,hand:g.ai.hand.filter((_,i)=>i!==a.i),board:nb}};
+  }
+  else if(a.t==="BOARD_ATK"){
+    // In guest view: tw:"ai"=host(player), tw:"player"=guest(ai)
+    const realTw=a.tw==="ai"?"player":"ai";
+    const realTi=a.ti;
+    const atkr=g.ai.board[a.bi];if(!atkr||atkr.sick||atkr.attacked)return;
+    const def=realTi===-1?null:g[realTw].board[realTi];
+    ng=atkF(g,"ai",a.bi,realTw,realTi);
+    // Trigger visual death anims
+    const nsCheck=ng;
+    setTimeout(()=>{
+      const atkDies=!nsCheck.ai.board.find(m=>m.uid===atkr.uid);
+      const defDies=def&&!nsCheck[realTw].board.find(m=>m.uid===def.uid);
+      if(atkDies||defDies){
+        // Find elements and animate
+        if(atkDies){const el=document.querySelector(`.om[data-oi="${a.bi}"] .minion`)||document.querySelector(`.om[data-oi="${a.bi}"]`);if(el)playDeathAnim(el);}
+        if(defDies&&realTw==="player"){const el=document.querySelector(`.em[data-ei="${realTi}"] .minion`)||document.querySelector(`.em[data-ei="${realTi}"]`);if(el)playDeathAnim(el);}
+      }
+    },120);
+  }
+  else if(a.t==="SPELL_TGT"){
+    // Guest targeted spell: a.ci=cardIdx, a.tw=guest-perspective team, a.ti=target idx
+    const realTw=a.tw==="ai"?"player":"ai";
+    ng={...castS(g,a.ci,"ai",realTw,a.ti)};
+  }
+  else if(a.t==="ET"){
+    ng={...startT({...g,turn:"ai",mode:"default",selCard:null,selAtk:null},"player")};
+    // Guest ended turn — now it's host's turn
+    GAME=ng;
+    mpSave();
+    render();
+    return;
+  }
+  else if(a.t==="CL"){
+    ng={...g,selCard:null,selAtk:null,mode:"default"};
+  }
+
+  if(ng){GAME=ng;mpSave();render();}
+}
+
+function mpSave(){
+  if(!MP||MP.role!=="host"||!GAME)return;
+  try{db().ref(`rooms/${MP.roomCode}/game`).set(JSON.stringify(GAME));}catch(e){}
+}
+
+// ── MP Screen: Deck Selection ──────────────────────────────────────────────
+function showMultiDeckSelect(){
+  let sel=0;
+  const renderList=()=>{
+    const el=document.getElementById("mp-decks");
+    if(!el)return;
+    el.innerHTML=MP_DECKS.map((d,i)=>`<div onclick="mpSelDeck(${i})" style="padding:12px 16px;background:${sel===i?"rgba(124,58,237,.15)":"rgba(15,15,15,.9)"};border:${sel===i?"1.5px solid #7c3aed":"1px solid #222"};border-radius:6px;cursor:pointer;transition:all .12s">
+      <div style="font-size:13px;color:${sel===i?"#c090ff":"#888"};font-family:monospace;font-weight:bold;letter-spacing:1px;margin-bottom:3px">${d.name}</div>
+      <div style="font-size:10px;color:#333;font-family:monospace">${d.ids.length}張牌</div>
+    </div>`).join("");
+  };
+  window.mpSelDeck=(i)=>{sel=i;renderList();};
+  R().innerHTML=`<div style="height:100vh;background:#080808;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;box-sizing:border-box;gap:20px">
+    <div style="font-size:11px;color:#444;letter-spacing:4px;font-family:monospace">多人對戰 · 選擇牌組</div>
+    <div id="mp-decks" style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px"></div>
+    <div style="display:flex;gap:10px;width:100%;max-width:300px">
+      <button onclick="mpCleanup();SCR='menu';render()" style="flex:1;padding:13px 0;background:transparent;color:#555;border:1px solid #1a1a1a;font-size:12px;letter-spacing:2px;border-radius:2px">返回</button>
+      <button onclick="MP_DECK=MP_DECKS[${0}].ids;window._mpSel=()=>MP_DECK=MP_DECKS[sel].ids;showLobby()" id="go-lobby" style="flex:2;padding:13px 0;background:#ede9dc;color:#0a0a0a;border:none;font-size:12px;letter-spacing:3px;border-radius:2px;font-weight:bold">進入大廳</button>
+    </div>
+  </div>`;
+  renderList();
+  document.getElementById("go-lobby").onclick=()=>{
+    Audio.sfxClick();
+    MP_DECK=MP_DECKS[sel].ids;
+    showLobby();
+  };
+}
+
+// ── MP Screen: Lobby ────────────────────────────────────────────────────────
+function showLobby(){
+  R().innerHTML=`<div style="height:100vh;background:#080808;display:flex;flex-direction:column">
+    <div style="padding:14px 18px;border-bottom:1px solid #161616;display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <button onclick="mpCleanup();SCR='menu';render()" style="padding:6px 12px;background:transparent;border:1px solid #1a1a1a;color:#555;font-size:11px;border-radius:2px;letter-spacing:1px">← 返回</button>
+      <div style="font-size:10px;color:#444;letter-spacing:3px;font-family:monospace;flex:1">對戰大廳</div>
+      <button id="create-btn" style="padding:8px 16px;background:#ede9dc;color:#0a0a0a;border:none;font-size:11px;letter-spacing:2px;border-radius:2px;font-weight:bold">＋ 建立房間</button>
+    </div>
+    <div id="room-list" style="flex:1;overflow-y:auto;padding:16px 18px"></div>
+  </div>`;
+
+  document.getElementById("create-btn").onclick=()=>{Audio.sfxClick();createMpRoom();};
+
+  const ref=db().ref("rooms");
+  window._lobbyRef=ref;
+  ref.on("value",snap=>{
+    const el=document.getElementById("room-list");if(!el)return;
+    const all=snap.val()||{};
+    const rooms=Object.entries(all).filter(([,v])=>v.status==="waiting").sort((a,b)=>b[1].createdAt-a[1].createdAt).slice(0,30);
+    if(!rooms.length){
+      el.innerHTML=`<div style="text-align:center;padding:72px 0">
+        <div style="font-size:36px;opacity:.12;margin-bottom:14px">◈</div>
+        <div style="color:#2a2a2a;font-size:12px;font-family:monospace;letter-spacing:1px;line-height:2">目前沒有等待中的房間<br><span style="color:#1e1e1e">點擊右上角建立一個房間吧</span></div>
+      </div>`;return;
+    }
+    el.innerHTML=rooms.map(([code,r])=>{
+      const s=Math.round((Date.now()-r.createdAt)/1000);
+      const t=s<60?`${s}秒前`:`${Math.round(s/60)}分鐘前`;
+      return`<div onclick="joinMpRoom('${code}')" style="padding:14px 16px;background:#0e0e0e;border:1px solid #1a1a1a;border-radius:6px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseenter="this.style.borderColor='#3a2060'" onmouseleave="this.style.borderColor='#1a1a1a'">
+        <div style="width:38px;height:38px;border-radius:50%;background:rgba(124,58,237,.1);border:1px solid #2a1a4a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="18" viewBox="0 0 18 20"><circle cx="9" cy="5" r="4" fill="#7c3aed"/><path d="M1,20 Q1,12 9,12 Q17,12 17,20" fill="#7c3aed"/></svg>
+        </div>
+        <div style="flex:1"><div style="font-size:12px;color:#aaa;font-family:monospace;font-weight:bold;letter-spacing:1px">房間 ${code}</div><div style="font-size:10px;color:#333;font-family:monospace;margin-top:2px">${t} 建立</div></div>
+        <div style="padding:5px 12px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.35);border-radius:3px;font-size:10px;color:#a070e8;font-family:monospace;letter-spacing:1px">加入</div>
+      </div>`;
+    }).join("");
+  });
+}
+
+// ── MP Room Management ──────────────────────────────────────────────────────
+function createMpRoom(){
+  if(!MP_DECK){toast("請先選擇牌組","err");return;}
+  const code=genCode();
+  db().ref(`rooms/${code}`).set({status:"waiting",createdAt:Date.now(),hostDeck:MP_DECK})
+  .then(()=>{
+    if(window._lobbyRef){window._lobbyRef.off();window._lobbyRef=null;}
+    MP={role:"host",roomCode:code};
+    showWaitingRoom(code);
+    // Listen for guest joining
+    db().ref(`rooms/${code}/status`).on("value",snap=>{
+      if(snap.val()==="playing"){
+        db().ref(`rooms/${code}/status`).off();
+        db().ref(`rooms/${code}`).once("value",s=>{
+          const d=s.val();
+          if(d?.guestDeck)startMpGame("host",code,MP_DECK,d.guestDeck);
+        });
+      }
+    });
+  }).catch(()=>toast("建立房間失敗","err"));
+}
+
+function joinMpRoom(code){
+  if(!MP_DECK){toast("請先選擇牌組","err");return;}
+  Audio.sfxClick();
+  db().ref(`rooms/${code}`).once("value",snap=>{
+    const d=snap.val();
+    if(!d||d.status!=="waiting"){toast("此房間已開始或不存在","err");return;}
+    if(window._lobbyRef){window._lobbyRef.off();window._lobbyRef=null;}
+    db().ref(`rooms/${code}`).update({status:"playing",guestDeck:MP_DECK})
+    .then(()=>{MP={role:"guest",roomCode:code};startMpGame("guest",code,d.hostDeck,MP_DECK);})
+    .catch(()=>toast("加入失敗","err"));
+  });
+}
+
+function showWaitingRoom(code){
+  R().innerHTML=`<div style="height:100vh;background:#080808;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;box-sizing:border-box">
+    <div style="font-size:36px;animation:spin 4s linear infinite;color:#3a1a6a;opacity:.7">◈</div>
+    <div style="font-size:11px;color:#555;font-family:monospace;letter-spacing:3px">等待對手加入中</div>
+    <div style="font-size:10px;color:#2a2a2a;font-family:monospace;padding:7px 18px;border:1px solid #1e1e1e;border-radius:3px;letter-spacing:3px">房間 ${code}</div>
+    <button onclick="cancelMpRoom('${code}')" style="margin-top:8px;padding:8px 22px;background:transparent;border:1px solid #1a1a1a;color:#444;font-size:11px;letter-spacing:2px;border-radius:2px">取消</button>
+  </div>`;
+}
+
+function cancelMpRoom(code){
+  try{db().ref(`rooms/${code}`).remove();}catch(e){}
+  mpCleanup();MP_DECK=null;SCR="menu";render();
+}
+
+// ── MP Game Start ───────────────────────────────────────────────────────────
+function startMpGame(role,code,hostDeckIds,guestDeckIds){
+  MP={role,roomCode:code,myDeckIds:role==="host"?hostDeckIds:guestDeckIds};
+  if(role==="host"){
+    // Host creates initial GAME
+    const pd=shuf(hostDeckIds).map(id=>mk(getDef(id)));
+    const ad=shuf(guestDeckIds).map(id=>mk(getDef(id)));
+    const ph=pd.splice(0,2),ah=ad.splice(0,2);
+    let s={player:{hp:50,mana:0,maxMana:0,deck:pd,hand:ph,board:[]},ai:{hp:50,mana:0,maxMana:0,deck:ad,hand:ah,board:[]},turn:"player",mode:"default",selCard:null,selAtk:null,log:["多人對戰！先手開始。"],over:null,lastDraws:[],aiNewCard:false};
+    s=startT(s,"player");
+    GAME=s;
+    SCR="battle";stopFireflies();render();
+    db().ref(`rooms/${code}/game`).set(JSON.stringify(GAME));
+    // Listen for guest actions
+    db().ref(`rooms/${code}/guestAction`).on("value",snap=>{
+      const v=snap.val();if(!v?.data||!GAME||GAME.turn!=="ai")return;
+      const action=JSON.parse(v.data);
+      db().ref(`rooms/${code}/guestAction`).remove();
+      mpApplyGuestAction(action);
+    });
+  }else{
+    // Guest listens for game state
+    GAME=null;SCR="battle";stopFireflies();render();
+    db().ref(`rooms/${code}/game`).on("value",snap=>{
+      const v=snap.val();if(!v)return;
+      GAME=JSON.parse(v);
+      render();
+    });
+  }
+}
+
+// ── MP act() integration helpers ───────────────────────────────────────────
+// Called from act() when MP.role==="guest" — sends action to Firebase
+function mpGuestAct(a){
+  if(!MP?.roomCode)return;
+  try{db().ref(`rooms/${MP.roomCode}/guestAction`).set({data:JSON.stringify(a),ts:Date.now()});}catch(e){}
+}
+// ══ END MULTIPLAYER ENGINE ════════════════════════════════════════════════════
 let _prevBarH=null; // stores previous bar heights for selective animation
 let drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false};
 let deckDrag={active:false,id:null,ghost:null,sx:0,sy:0,moved:false};
@@ -1695,7 +1958,7 @@ function showMenu(){
     <div style="position:absolute;bottom:24px;font-size:10px;color:#222;letter-spacing:4px;font-family:monospace;z-index:1">${CARDS.length} CARDS IN COLLECTION</div>
   </div>`;
   document.getElementById("bs").onclick=()=>{Audio.sfxClick();GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
-  document.getElementById("bm").onclick=()=>{Audio.sfxClick();toast("多人對戰功能正在開發中，敬請期待！","ok");};
+  document.getElementById("bm").onclick=()=>{Audio.sfxClick();showMultiDeckSelect();};
   document.getElementById("bd").onclick=()=>{Audio.sfxClick();SCR="deck";stopFireflies();render();};
 
   // Purple title glow — slow breathing ~3s cycle
@@ -1715,8 +1978,13 @@ function stopFireflies(){if(window._menuCleanup)window._menuCleanup();}
 
 // ── SHOW BATTLE ───────────────────────
 function showBattle(){
-  const g=GAME,{player:pl,ai,turn,mode,selCard,selAtk,log,over,lastDraws,aiNewCard}=g;
-  const isP=turn==="player"&&!over&&!animLock,canTgt=mode==="attacking";
+  // MP Guest: flip game perspective so guest sees themselves at bottom
+  const g=(MP&&MP.role==="guest")?mpFlip(GAME):GAME;
+  if(!g)return;
+  const{player:pl,ai,turn,mode,selCard,selAtk,log,over,lastDraws,aiNewCard}=g;
+  // isP: true when it's the local player's turn
+  const localTurn=MP?.role==="guest"?(GAME.turn==="ai"):(turn==="player");
+  const isP=localTurn&&!over&&!animLock,canTgt=mode==="attacking";
   // Wire AI deck viewer button
   setTimeout(()=>{
     const viewDeckBtn=document.getElementById("view-ai-deck");
@@ -1827,7 +2095,7 @@ function showBattle(){
       <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
       <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
       <button id="view-ai-deck" style="margin-left:auto;padding:3px 8px;background:rgba(80,60,20,.4);border:1px solid #4a3a10;color:#b8902a;font-size:8px;letter-spacing:1px;border-radius:2px">查看牌組</button>
-      ${turn==="ai"&&!over?`<span style="font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">思考中...</span>`:""}
+      ${MP&&GAME.turn==="player"?`<span style="font-size:10px;color:#6a9a6a;letter-spacing:1px;font-family:monospace;animation:mist 2s ease-in-out infinite">等待對手...</span>`:turn==="ai"&&!over&&!MP?`<span style="font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">思考中...</span>`:""}
     </div>
     <div class="ai-hand-wrap">${hAIFan(ai.hand.length,aiNewCard)}</div>
     <div class="hp-bar-row top" style="padding:0 14px;gap:10px">
@@ -1865,7 +2133,8 @@ function showBattle(){
       const nextStage=Math.min((window._aiStage||0)+1,AI_CHARS.length-1);
       setTimeout(()=>{window._aiStage=nextStage;},800);
     }
-    document.getElementById("gmn").onclick=()=>{Audio.sfxClick();GAME=null;SCR="menu";render();};return;}
+    if(over&&MP){setTimeout(()=>{try{db().ref(`rooms/${MP.roomCode}`).remove();}catch(e){}},3000);}
+    document.getElementById("gmn").onclick=()=>{Audio.sfxClick();mpCleanup();GAME=null;SCR="menu";render();};return;}
   document.getElementById("bsv").onclick=()=>{Audio.sfxClick();GAME=null;SCR="menu";render();};
   if(isP){
     document.getElementById("bet").onclick=()=>{if(animLock){toast("動作進行中...","warn");return;}Audio.sfxEndTurn();act({t:"ET"});};
@@ -1876,7 +2145,8 @@ function showBattle(){
     document.querySelector(".hp-bar-row.top")?.addEventListener("click",()=>act({t:"EH"}));
   }
   addDragListeners();
-  if(turn==="ai"&&!over&&!aiRunning){
+  // MP: never run AI script — opponent is human
+  if(!MP&&turn==="ai"&&!over&&!aiRunning){
     aiRunning=true;
     setTimeout(()=>{
       const{script,finalState}=computeAiScript(GAME);animLock=true;
@@ -2278,7 +2548,9 @@ function doPlayerAtk(bi,tw,ti){
 }
 
 // ── DISPATCH ──────────────────────────
-function act(a){
+function act(a,fromNetwork=false){
+  // MP Guest: forward action to Firebase instead of running locally
+  if(MP&&MP.role==="guest"&&!fromNetwork){mpGuestAct(a);return;}
   if(!GAME||GAME.over||GAME.turn!=="player"||animLock)return;const g=GAME;
   if(a.t==="EA"){
     // Fix 8: all-target damage
@@ -2402,8 +2674,18 @@ function act(a){
   }else if(a.t==="BOARD_ATK"){
     const m=g.player.board[a.bi];if(m&&m.sick){toast("召喚後本回合不能攻擊","warn");return;}if(m&&m.attacked){toast("此隨從本回合已行動","warn");return;}doPlayerAtk(a.bi,a.tw,a.ti);return;
   }else if(a.t==="CL"){GAME={...g,selCard:null,selAtk:null,mode:"default"};
-  }else if(a.t==="ET"){toast("對方回合","ai");Audio.sfxTurnStartAI();GAME=startT({...g,selCard:null,selAtk:null,mode:"default"},"ai");}
+  }else if(a.t==="ET"){
+    if(MP){
+      // MP: host ends turn → guest's turn, no AI script
+      toast("對方回合","ai");Audio.sfxTurnStartAI();
+      GAME=startT({...g,selCard:null,selAtk:null,mode:"default"},"ai");
+      render();mpSave();return;
+    }
+    toast("對方回合","ai");Audio.sfxTurnStartAI();GAME=startT({...g,selCard:null,selAtk:null,mode:"default"},"ai");
+  }
   render();
+  // MP Host: save state after every action
+  if(MP&&MP.role==="host")mpSave();
 }
 
 // ── ROUTER ────────────────────────────
