@@ -1258,8 +1258,15 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
     GAME=null;SCR="battle";stopFireflies();render();
     db().ref(`rooms/${code}/game`).on("value",snap=>{
       const v=snap.val();if(!v)return;
-      GAME=JSON.parse(v);
-      guestUI={selAtk:null,selCard:null,mode:"default"}; // reset UI on new state
+      const newG=JSON.parse(v);
+      // Pre-update lagHp based on HP changes so animations fire correctly
+      if(GAME){
+        // Guest perspective: ph=GAME.ai.hp, ah=GAME.player.hp
+        if(newG.ai.hp!==GAME.ai.hp)lagHp["ai"]=Math.max(newG.ai.hp,lagHp["ai"]??50);
+        if(newG.player.hp!==GAME.player.hp)lagHp["player"]=Math.max(newG.player.hp,lagHp["player"]??50);
+      }
+      GAME=newG;
+      guestUI={selAtk:null,selCard:null,mode:"default"};
       render();
     });
   }
@@ -1697,9 +1704,12 @@ function flyCardToDeck(cardEl){
 // Update lag bars after render — if HP dropped, delay lag bar to create trailing effect
 function updateLagBars(){
   if(!GAME)return;
-  ['player','ai'].forEach(who=>{
-    const id=who==="player"?"ph":"ah";
-    const curHp=GAME[who].hp;
+  // For guest, player/ai are visually swapped: 'ph' shows GAME.ai.hp, 'ah' shows GAME.player.hp
+  const isGuest=MP?.role==="guest";
+  const bars=isGuest
+    ?[{who:"player",id:"ah",hp:GAME.player.hp},{who:"ai",id:"ph",hp:GAME.ai.hp}]
+    :[{who:"player",id:"ph",hp:GAME.player.hp},{who:"ai",id:"ah",hp:GAME.ai.hp}];
+  bars.forEach(({who,id,hp:curHp})=>{
     const fillEl=document.getElementById("fill-"+id);
     const lagEl=document.getElementById("lag-"+id);
     if(!fillEl)return;
@@ -2344,9 +2354,11 @@ function onUp(e){
       }
       if(card&&card.type!=="minion"){
         const vertDist=savedStartY-p.y;
-        // Self-cast spells fire when dragged 80px upward (onto battlefield)
         if(card.effect==="draw"||card.effect==="heal"||card.effect==="aoe"||card.effect==="random_destroy"){
           if(vertDist<80){return;}
+          // Guest: send through act() which forwards to Firebase
+          if(MP?.role==="guest"){act({t:"HC",i:sc});return;}
+          // Host/single: run locally
           if(card.effect==="draw"||card.effect==="heal"){
             const g2=GAME;
             GAME={...castS(g2,sc,"player","player",-1),selCard:null,selAtk:null,mode:"default"};
@@ -2363,21 +2375,37 @@ function onUp(e){
             if(diedR)setTimeout(()=>render(),2500);else render();
             return;
           }
-          render();
-          return;
+          if(MP?.role==="host")mpSave();
+          render();return;
         }
         // Targeted spells
         const cl=closestTarget(p.x,p.y);
         if(cl&&cl.dist<READY*1.4){
           const em=cl.el.closest(".em"),isH=cl.el.id==="ah"||cl.el.closest(".hp-bar-row.top");
-          if(em){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});return;}
-          if(isH){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EH"});return;}
+          if(em){
+            if(MP?.role==="guest"){guestUI={...guestUI,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});}
+            else{GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});}
+            return;
+          }
+          if(isH){
+            if(MP?.role==="guest"){guestUI={...guestUI,selCard:sc,mode:"targeting"};act({t:"EH"});}
+            else{GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"EH"});}
+            return;
+          }
         }
         const el2=document.elementFromPoint(p.x,p.y);
         if(el2){
           const om=el2.closest(".om"),ph=el2.closest("#ph")||el2.closest(".hp-bar-row.bot");
-          if(om&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"PM",i:+om.dataset.oi});return;}
-          if(ph&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"PH"});return;}
+          if(om&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){
+            if(MP?.role==="guest"){guestUI={...guestUI,selCard:sc,mode:"targeting"};act({t:"PM",i:+om.dataset.oi});}
+            else{GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"PM",i:+om.dataset.oi});}
+            return;
+          }
+          if(ph&&(card.effect==="heal"||card.effect==="drain"||card.effect==="dmg")){
+            if(MP?.role==="guest"){guestUI={...guestUI,selCard:sc,mode:"targeting"};act({t:"PH"});}
+            else{GAME={...GAME,selCard:sc,mode:"targeting"};act({t:"PH"});}
+            return;
+          }
         }
       }
       const el=document.elementFromPoint(p.x,p.y);if(el)handDrop(sc,ss,el);
@@ -2407,9 +2435,12 @@ function getSlot(cx){
   return slot;
 }
 function updateSlots(ins){
-  const pb=document.getElementById("pb");if(!pb||!GAME)return;const pl=GAME.player;let h="";
-  if(!pl.board.length){h=ins!=null?`<div class="board-slot-ghost"></div>`:`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 我方戰場 —</div>`;}
-  else{for(let i=0;i<=pl.board.length;i++){if(ins===i)h+=`<div class="board-slot-ghost"></div>`;if(i<pl.board.length){const m=pl.board[i];h+=`<div class="om" data-oi="${i}">${hMinion(m,GAME.selAtk===i,false,m.uid===newSummonUid)}</div>`;}}}
+  const pb=document.getElementById("pb");if(!pb||!GAME)return;
+  const board=myBoard()||[];
+  const selAtk=MP?.role==="guest"?guestUI.selAtk:GAME.selAtk;
+  let h="";
+  if(!board.length){h=ins!=null?`<div class="board-slot-ghost"></div>`:`<div style="color:#d4cf4a;font-size:10px;letter-spacing:3px;font-family:monospace">— 我方戰場 —</div>`;}
+  else{for(let i=0;i<=board.length;i++){if(ins===i)h+=`<div class="board-slot-ghost"></div>`;if(i<board.length){const m=board[i];h+=`<div class="om" data-oi="${i}">${hMinion(m,selAtk===i,false,m.uid===newSummonUid)}</div>`;}}}
   pb.innerHTML=h;
 }
 
