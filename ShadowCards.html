@@ -670,6 +670,17 @@ const CARDS=[
 const getDef=id=>CARDS.find(c=>c.id===id);
 const DEF_DECK=["m01","m01","s01","s01","m02","m02","m03","m03","s02","s03","m04","m04","s04","m05","m05","m07","m07","m08","s05","m06","m06","m09","m09","m10","m11","m12","s06","m13","m14","m14"];
 
+// ── DECK STORAGE ─────────────────────────────────────────────────────────────
+const DEFAULT_SAVED_DECK={name:"系統默認牌組",ids:DEF_DECK,isDefault:true};
+function loadSavedDecks(){
+  try{const d=JSON.parse(localStorage.getItem("sc_decks")||"[]");return d.slice(0,5);}catch(e){return[];}
+}
+function saveSavedDecks(decks){
+  try{localStorage.setItem("sc_decks",JSON.stringify(decks.slice(0,5)));}catch(e){}
+}
+function getAllDecks(){return[DEFAULT_SAVED_DECK,...loadSavedDecks()];}
+function getDeckById(idx){return getAllDecks()[idx]||DEFAULT_SAVED_DECK;}
+
 // ── 5 AI CHARACTERS ──────────────────────────────────────────────────────────
 const AI_CHARS=[
   {
@@ -1013,9 +1024,45 @@ const FIREBASE_CFG={apiKey:"AIzaSyDaMkDm2G-4xYZbfPELXIuYiUXIGJI7c9E",authDomain:
 let _fb=null;
 function db(){if(!_fb){if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CFG);_fb=firebase.database();}return _fb;}
 
-let MP=null; // {role:"host"|"guest", roomCode, deckIds}
-let MP_DECK=null; // selected deck ids for MP
-let guestUI={selAtk:null,selCard:null,mode:"default"}; // local UI state for guest (not synced)
+let MP=null;
+let MP_DECK=null;
+let guestUI={selAtk:null,selCard:null,mode:"default"};
+let _presenceThrottle=0;
+let _opponentDrag=null; // {x,y,cardName,sym,cost} from Firebase
+
+function mpBroadcastDrag(info){
+  if(!MP?.roomCode)return;
+  const now=Date.now();if(now-_presenceThrottle<80)return; // throttle to ~12fps
+  _presenceThrottle=now;
+  try{db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).set(info);}catch(e){}
+}
+function mpClearDrag(){
+  if(!MP?.roomCode)return;
+  try{db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).remove();}catch(e){}
+}
+function mpListenPresence(code){
+  const oppRole=MP.role==="host"?"guest":"host";
+  db().ref(`rooms/${code}/presence/${oppRole}`).on("value",snap=>{
+    _opponentDrag=snap.val();
+    renderOpponentDrag();
+  });
+}
+function renderOpponentDrag(){
+  let el=document.getElementById("opp-drag");
+  if(!_opponentDrag){if(el)el.remove();return;}
+  const{x,y,cardName,sym,cost}=_opponentDrag;
+  if(!el){
+    el=document.createElement("div");el.id="opp-drag";
+    el.style.cssText="position:fixed;pointer-events:none;z-index:850;transition:left .08s,top .08s";
+    document.body.appendChild(el);
+  }
+  el.style.left=(x-30)+"px";el.style.top=(y-50)+"px";
+  el.innerHTML=`<div style="width:60px;height:80px;background:rgba(20,20,30,.88);border:1.5px solid rgba(124,58,237,.6);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:0 0 16px rgba(124,58,237,.35);opacity:.88">
+    <div style="font-size:16px;color:#ddd">${sym||"◈"}</div>
+    <div style="font-size:7px;color:#aaa;font-family:monospace;text-align:center;padding:0 3px;line-height:1.3">${cardName||""}</div>
+    <div style="font-size:9px;color:#a070e8;font-family:monospace">${cost!=null?cost:""}</div>
+  </div>`;
+}
 
 const MP_DECKS=[
   {name:"均衡型",  ids:["m01","m01","s01","s01","m02","m02","m03","m03","m04","m04","s02","s03","m05","m05","m06","m06","s04","m07","m07","m08","m08","s05","m09","m10","m10","m11","s06","m12","m13","m14"]},
@@ -1027,8 +1074,15 @@ const MP_DECKS=[
 function genCode(){const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";for(let i=0;i<5;i++)s+=c[0|Math.random()*c.length];return s;}
 
 function mpCleanup(){
-  try{if(MP?.roomCode){db().ref(`rooms/${MP.roomCode}/guestAction`).off();db().ref(`rooms/${MP.roomCode}/game`).off();db().ref(`rooms/${MP.roomCode}/status`).off();}}catch(e){}
+  try{if(MP?.roomCode){
+    db().ref(`rooms/${MP.roomCode}/guestAction`).off();
+    db().ref(`rooms/${MP.roomCode}/game`).off();
+    db().ref(`rooms/${MP.roomCode}/status`).off();
+    db().ref(`rooms/${MP.roomCode}/presence`).off();
+    if(MP.role)db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).remove();
+  }}catch(e){}
   if(window._lobbyRef){try{window._lobbyRef.off();}catch(e){}window._lobbyRef=null;}
+  _opponentDrag=null;renderOpponentDrag();
   MP=null;
 }
 
@@ -1117,9 +1171,39 @@ function mpSave(){
   try{db().ref(`rooms/${MP.roomCode}/game`).set(JSON.stringify(GAME));}catch(e){}
 }
 
-// ── MP Screen: Deck Selection ──────────────────────────────────────────────
-function showMultiDeckSelect(){
+// ── DECK SELECTOR (shown before battle) ─────────────────────────────────────
+function showDeckSelect(onConfirm){
   let sel=0;
+  const allDecks=getAllDecks();
+  const render2=()=>{
+    const el=document.getElementById("ds-list");if(!el)return;
+    el.innerHTML=allDecks.map((d,i)=>`<div onclick="window._dsSel=${i};document.querySelectorAll('.ds-item').forEach((e,j)=>e.style.borderColor=j===${i}?'#7c3aed':'#1a1a1a');document.querySelectorAll('.ds-item').forEach((e,j)=>e.style.background=j===${i}?'rgba(124,58,237,.12)':'rgba(10,10,10,.9)')" class="ds-item" style="padding:12px 16px;background:${i===0?"rgba(124,58,237,.12)":"rgba(10,10,10,.9)"};border:${i===0?"1.5px solid #7c3aed":"1px solid #1a1a1a"};border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:10px">
+      <div style="flex:1">
+        <div style="font-size:12px;color:${d.isDefault?"#888":"#ccc"};font-family:monospace;font-weight:bold;letter-spacing:.5px">${d.name}${d.isDefault?"  <span style='font-size:9px;color:#444'>(系統)</span>":""}</div>
+        <div style="font-size:9px;color:#444;font-family:monospace;margin-top:2px">${d.ids.length}張 · 平均費用 ${(d.ids.reduce((s,id)=>{const c=getDef(id);return s+(c?.cost||0);},0)/d.ids.length).toFixed(1)}</div>
+      </div>
+      ${i===sel?`<div style="width:6px;height:6px;border-radius:50%;background:#7c3aed"></div>`:""}
+    </div>`).join("");
+    window._dsSel=0;
+  };
+  R().innerHTML=`<div style="height:100vh;background:#080808;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;gap:16px">
+    <div style="font-size:10px;color:#444;letter-spacing:4px;font-family:monospace">選擇出戰牌組</div>
+    <div id="ds-list" style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:300px;max-height:65vh;overflow-y:auto"></div>
+    <div style="display:flex;gap:10px;width:100%;max-width:300px">
+      <button onclick="SCR='menu';render()" style="flex:1;padding:12px 0;background:transparent;color:#444;border:1px solid #1a1a1a;font-size:11px;letter-spacing:2px;border-radius:2px">返回</button>
+      <button id="ds-go" style="flex:2;padding:12px 0;background:#ede9dc;color:#0a0a0a;border:none;font-size:12px;letter-spacing:3px;border-radius:2px;font-weight:bold">確認出戰</button>
+    </div>
+  </div>`;
+  render2();
+  document.getElementById("ds-go").onclick=()=>{
+    Audio.sfxClick();
+    const idx=window._dsSel??0;
+    const chosen=getAllDecks()[idx]||DEFAULT_SAVED_DECK;
+    onConfirm(chosen.ids);
+  };
+}
+function showMultiDeckSelect(preIds){
+  if(preIds){MP_DECK=preIds;showLobby();return;}
   const renderList=()=>{
     const el=document.getElementById("mp-decks");
     if(!el)return;
@@ -1246,6 +1330,7 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
     GAME=s;
     SCR="battle";stopFireflies();render();
     db().ref(`rooms/${code}/game`).set(JSON.stringify(GAME));
+    mpListenPresence(code);
     // Listen for guest actions
     db().ref(`rooms/${code}/guestAction`).on("value",snap=>{
       const v=snap.val();if(!v?.data||!GAME||GAME.turn!=="ai")return;
@@ -1256,14 +1341,14 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
   }else{
     // Guest listens for game state
     GAME=null;SCR="battle";stopFireflies();render();
+    mpListenPresence(code);
     db().ref(`rooms/${code}/game`).on("value",snap=>{
       const v=snap.val();if(!v)return;
       const newG=JSON.parse(v);
-      // Pre-update lagHp based on HP changes so animations fire correctly
       if(GAME){
-        // Guest perspective: ph=GAME.ai.hp, ah=GAME.player.hp
-        if(newG.ai.hp!==GAME.ai.hp)lagHp["ai"]=Math.max(newG.ai.hp,lagHp["ai"]??50);
-        if(newG.player.hp!==GAME.player.hp)lagHp["player"]=Math.max(newG.player.hp,lagHp["player"]??50);
+        // Guest: lagHp["player"]→ph→GAME.ai.hp(own), lagHp["ai"]→ah→GAME.player.hp(opponent)
+        if(newG.ai.hp < (GAME.ai.hp||50))lagHp["player"]=GAME.ai.hp;      // own hp dropped
+        if(newG.player.hp < (GAME.player.hp||50))lagHp["ai"]=GAME.player.hp; // opponent hp dropped
       }
       GAME=newG;
       guestUI={selAtk:null,selCard:null,mode:"default"};
@@ -1704,10 +1789,11 @@ function flyCardToDeck(cardEl){
 // Update lag bars after render — if HP dropped, delay lag bar to create trailing effect
 function updateLagBars(){
   if(!GAME)return;
-  // For guest, player/ai are visually swapped: 'ph' shows GAME.ai.hp, 'ah' shows GAME.player.hp
   const isGuest=MP?.role==="guest";
+  // ph uses lagHp["player"] (isAI=false in hHpBar), ah uses lagHp["ai"] (isAI=true)
+  // Guest: ph shows GAME.ai.hp (own), ah shows GAME.player.hp (opponent)
   const bars=isGuest
-    ?[{who:"player",id:"ah",hp:GAME.player.hp},{who:"ai",id:"ph",hp:GAME.ai.hp}]
+    ?[{who:"player",id:"ph",hp:GAME.ai.hp},{who:"ai",id:"ah",hp:GAME.player.hp}]
     :[{who:"player",id:"ph",hp:GAME.player.hp},{who:"ai",id:"ah",hp:GAME.ai.hp}];
   bars.forEach(({who,id,hp:curHp})=>{
     const fillEl=document.getElementById("fill-"+id);
@@ -1820,6 +1906,7 @@ function buildDeck(){
     <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
       <span style="font-size:12px;font-family:monospace;color:${tot===30?"#7d7":"#d4c840"}">${tot}/30</span>
       <button id="dsv" style="padding:7px 16px;background:${tot===30?"#ede9dc":"#111"};color:${tot===30?"#000":"#444"};border:none;font-size:11px;letter-spacing:2px">儲存牌組</button>
+      <button id="dsave-custom" style="padding:7px 12px;background:transparent;color:#7c3aed;border:1px solid #3a1a7a;font-size:10px;letter-spacing:1px;border-radius:2px">另存新牌組</button>
     </div>
   </div><div class="dbody">
     <div class="pool">
@@ -1873,6 +1960,16 @@ function buildDeck(){
   document.getElementById("dbk").onclick=()=>{_prevBarH=null;Audio.sfxClick();SCR="menu";render();};
   document.getElementById("dsv").onclick=()=>{if(tot===30){Audio.sfxClick();DECK=[...deckEdit];SCR="menu";render();}};
   document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;Audio.sfxClick();deckEdit=[];buildDeck();};
+  const saveDeckBtn=document.getElementById("dsave-custom");
+  if(saveDeckBtn)saveDeckBtn.onclick=()=>{
+    if(tot!==30){toast("牌組需要30張才能儲存","err");return;}
+    const name=prompt("牌組名稱（最多10字）","自定義牌組");
+    if(!name)return;
+    const existing=loadSavedDecks();
+    if(existing.length>=5){toast("最多只能儲存5副牌組","err");return;}
+    saveSavedDecks([...existing,{name:name.slice(0,10),ids:[...deckEdit]}]);
+    toast("牌組已儲存："+name.slice(0,10),"ok");
+  };
 
   // Pool card interactions
   document.querySelectorAll(".pc[data-id]").forEach(card=>{
@@ -1972,8 +2069,8 @@ function showMenu(){
     </div>
     <div style="position:absolute;bottom:24px;font-size:10px;color:#222;letter-spacing:4px;font-family:monospace;z-index:1">${CARDS.length} CARDS IN COLLECTION</div>
   </div>`;
-  document.getElementById("bs").onclick=()=>{Audio.sfxClick();GAME=newGame(DECK);SCR="battle";stopFireflies();render();};
-  document.getElementById("bm").onclick=()=>{Audio.sfxClick();showMultiDeckSelect();};
+  document.getElementById("bs").onclick=()=>{Audio.sfxClick();showDeckSelect(ids=>{DECK=[...ids];GAME=newGame(DECK);SCR="battle";stopFireflies();render();});};
+  document.getElementById("bm").onclick=()=>{Audio.sfxClick();showDeckSelect(ids=>{MP_DECK=ids;showMultiDeckSelect(ids);});};
   document.getElementById("bd").onclick=()=>{Audio.sfxClick();SCR="deck";stopFireflies();render();};
 
   // Purple title glow — slow breathing ~3s cycle
@@ -2230,6 +2327,10 @@ function onMove(e){
   const dist=Math.sqrt(ddx*ddx+ddy*ddy);
   // Fix 1: minion needs 50px drag distance, spells need 22px, board attacks need 10px
   const dragCard=drag.type==="hand"?(myHand()||[])[drag.cardIdx]:null;
+  // MP: broadcast drag position for opponent to see
+  if(MP&&drag.dragging&&dragCard){
+    mpBroadcastDrag({x:p.x,y:p.y,cardName:dragCard.name,sym:dragCard.sym,cost:dragCard.cost});
+  }
   const threshold=drag.type==="board"?10:dragCard&&dragCard.type!=="minion"?22:50;
   // Fix 1: use smaller threshold when zoom is showing (20px feels natural for swipe)
   const swipeThreshold=drag.wasLP?20:threshold;
@@ -2339,6 +2440,7 @@ function onUp(e){
   const p=pt(e,true);
   const savedStartY=drag.startY; // save before reset!
   drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false,invalid:false};
+  if(MP)mpClearDrag();
   if(type==="hand"){
     const card=GAME&&(myHand()||[])[sc];
     if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>myMana()){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
