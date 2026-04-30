@@ -1626,7 +1626,7 @@ function hCardZoom(c){
   return`<div style="display:flex;flex-direction:column;align-items:center">${topLbl}${cardHtml}${botLbl}</div>`;
 }
 function showZoom(idx){
-  if(!GAME)return;const hand=GAME.player.hand;if(!hand||!hand[idx])return;
+  if(!GAME)return;const hand=(myHand()||[]);if(!hand||!hand[idx])return;
   zoomCardIdx=idx;_showZoomEl(hCardZoom(hand[idx]),true);
 }
 function showZoomCard(c){if(!c)return;zoomCardIdx=-1;_showZoomEl(hCardZoom(c),false);}
@@ -1638,7 +1638,7 @@ function _showZoomEl(html,swipeable){
   const ov=document.createElement("div");ov.id="zoom-overlay";ov.innerHTML=html;
   if(!swipeable)ov.onclick=()=>hideZoom();
   document.body.appendChild(ov);
-  if(swipeable&&GAME&&GAME.player.hand.length>1){
+  if(swipeable&&GAME&&(myHand()||[]).length>1){
     const h=document.createElement("div");
     h.id="zoom-hint";h.style.cssText="position:fixed;bottom:calc(50% - 190px);left:0;right:0;text-align:center;font-size:11px;color:rgba(255,200,80,.65);font-family:monospace;letter-spacing:1px;pointer-events:none;z-index:901";
     h.textContent="← 左右滑動切換手牌 →";document.body.appendChild(h);
@@ -2163,6 +2163,12 @@ function showBattle(){
 // ── DRAG SYSTEM ───────────────────────
 function pt(e,ch){const s=(ch&&e.changedTouches)?e.changedTouches:e.touches;if(s&&s.length)return{x:s[0].clientX,y:s[0].clientY};return{x:e.clientX,y:e.clientY};}
 function clearLP(){if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}}
+// MP perspective helpers — use these everywhere instead of hardcoded GAME.player/turn
+const myTurn=()=>MP?.role==="guest"?GAME?.turn==="ai":GAME?.turn==="player";
+const myHand=()=>MP?.role==="guest"?GAME?.ai?.hand:GAME?.player?.hand;
+const myBoard=()=>MP?.role==="guest"?GAME?.ai?.board:GAME?.player?.board;
+const myMana=()=>MP?.role==="guest"?GAME?.ai?.mana:GAME?.player?.mana;
+
 function addDragListeners(){
   if(listenersAdded)return;listenersAdded=true;
   document.addEventListener("mousemove",onMove,{passive:false});document.addEventListener("mouseup",onUp);
@@ -2175,7 +2181,7 @@ function onDown(e){
   if(!hs&&!om&&!em)return;
   e.preventDefault();const p=pt(e);
   if(hs){
-    if(GAME.turn!=="player")return;
+    if(!myTurn())return;
     // Use each card's layout left offset (no rotation effect) + fan container position
     // to find which card strip contains the touch. Reliable across all rotations.
     const hw=document.querySelector(".hand-wrap");
@@ -2197,22 +2203,23 @@ function onDown(e){
     drag={active:true,type:"hand",cardIdx:idx,boardIdx:-1,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:srcEl||hs,wasLP:false};
     lpTimer=setTimeout(()=>{lpTimer=null;if(!drag.dragging){drag.wasLP=true;showZoom(idx);}},500);
   } else if(om){
-    if(GAME.turn!=="player")return;
+    if(!myTurn())return;
     const bi=+om.dataset.oi;
     drag={active:true,type:"board",cardIdx:-1,boardIdx:bi,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false};
-    // Fix 8: long-press player board card → zoom
-    lpTimer=setTimeout(()=>{lpTimer=null;if(!drag.dragging){drag.wasLP=true;const m=GAME.player.board[bi];if(m)showZoomMinion(m);}},500);
+    // long-press player board card → zoom
+    lpTimer=setTimeout(()=>{lpTimer=null;if(!drag.dragging){drag.wasLP=true;const m=(myBoard()||[])[bi];if(m)showZoomMinion(m);}},500);
   } else if(em){
-    // Fix 8: long-press enemy board card → zoom (no drag)
+    // long-press enemy board card → zoom (no drag)
     const bi=+em.dataset.ei;
-    lpTimer=setTimeout(()=>{lpTimer=null;const m=GAME.ai.board[bi];if(m)showZoomMinion(m);},500);
+    const enemyBoard=MP?.role==="guest"?GAME?.player?.board:GAME?.ai?.board;
+    lpTimer=setTimeout(()=>{lpTimer=null;const m=(enemyBoard||[])[bi];if(m)showZoomMinion(m);},500);
   }
 }
 function onMove(e){
   if(!drag.active)return;e.preventDefault();const p=pt(e),ddx=p.x-drag.startX,ddy=p.y-drag.startY;
   const dist=Math.sqrt(ddx*ddx+ddy*ddy);
   // Fix 1: minion needs 50px drag distance, spells need 22px, board attacks need 10px
-  const dragCard=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
+  const dragCard=drag.type==="hand"?(myHand()||[])[drag.cardIdx]:null;
   const threshold=drag.type==="board"?10:dragCard&&dragCard.type!=="minion"?22:50;
   // Fix 1: use smaller threshold when zoom is showing (20px feels natural for swipe)
   const swipeThreshold=drag.wasLP?20:threshold;
@@ -2221,7 +2228,7 @@ function onMove(e){
       const adx=Math.abs(p.x-drag.startX),ady=Math.abs(p.y-drag.startY);
       if(adx>ady){
         // Horizontal swipe → find which hand card the finger is currently over
-        const hand=GAME&&GAME.player.hand;
+        const hand=GAME&&(myHand()||[]);
         if(hand&&hand.length>1){
           const hw=document.querySelector(".hand-wrap");
           if(hw){
@@ -2276,7 +2283,7 @@ function onMove(e){
     }
   }
   if(!drag.dragging)return;if(drag.ghost){drag.ghost.style.left=p.x+"px";drag.ghost.style.top=p.y+"px";}
-  const card=drag.type==="hand"?(GAME&&GAME.player.hand[drag.cardIdx]):null;
+  const card=drag.type==="hand"?(GAME&&(myHand()||[])[drag.cardIdx]):null;
   if(drag.type==="hand"&&card&&card.type==="minion"){
     const slot=getSlot(p.x);if(slot!==drag.insertSlot){drag.insertSlot=slot;updateSlots(slot);}
     // Fix 2+3: orange glow on ghost + battlefield indicator when above hand-wrap
@@ -2323,16 +2330,16 @@ function onUp(e){
   const savedStartY=drag.startY; // save before reset!
   drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false,invalid:false};
   if(type==="hand"){
-    const card=GAME&&GAME.player.hand[sc];
-    if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>GAME.player.mana){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
+    const card=GAME&&(myHand()||[])[sc];
+    if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>myMana()){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
     else if(wd){
-      if(card&&card.cost>GAME.player.mana){toast("魔力不足！","err");return;}
-      if(card&&card.type==="minion"&&GAME.player.board.length>=7){toast("戰場已滿！","err");return;}
+      if(card&&card.cost>myMana()){toast("魔力不足！","err");return;}
+      if(card&&card.type==="minion"&&(myBoard()||[]).length>=7){toast("戰場已滿！","err");return;}
       if(card&&card.type==="minion"){
         // Fix 1: only summon if released above hand-wrap (i.e. on the board area)
         const hwEl=document.querySelector(".hand-wrap");
         if(hwEl){const hr=hwEl.getBoundingClientRect();if(p.y>=hr.top){return;}} // still in hand area — cancel
-        const slot=ss!=null?ss:GAME.player.board.length;
+        const slot=ss!=null?ss:(myBoard()||[]).length;
         act({t:"HC_AT",i:sc,slot});return;
       }
       if(card&&card.type!=="minion"){
@@ -2380,7 +2387,7 @@ function onUp(e){
     else{
       if(invalid){
         // Show specific reason for invalid board drag
-        const m=GAME&&GAME.player.board[sb];
+        const m=GAME&&(myBoard()||[])[sb];
         if(m&&m.sick)toast("此隨從下回合才能攻擊","err");
         else if(m&&m.attacked)toast("此隨從本回合已行動","warn");
         return;
@@ -2410,7 +2417,7 @@ function updateSlots(ins){
 const PROX=160,READY=78;
 function updateProxArrow(fx,fy){
   const ts=[];
-  if(drag.type==="hand"){const card=GAME&&GAME.player.hand[drag.cardIdx];if(!card||card.type==="minion")return;}
+  if(drag.type==="hand"){const card=GAME&&(myHand()||[])[drag.cardIdx];if(!card||card.type==="minion")return;}
   // Fix 1: arrow tip near bottom edge of minion card
   document.querySelectorAll(".em").forEach(em=>{
     const r=em.getBoundingClientRect();
@@ -2497,7 +2504,25 @@ function closestTarget(fx,fy){
   });
   return best;
 }
-function handDrop(ci,ins,el){if(!GAME||GAME.turn!=="player")return;const card=GAME.player.hand[ci];if(!card||card.cost>GAME.player.mana)return;if(card.type==="minion"){if(el.closest("#pb")||el.closest(".board-slot-ghost"))act({t:"HC_AT",i:ci,slot:ins!=null?ins:GAME.player.board.length});}else if(card.effect==="heal"||card.effect==="draw"){act({t:"HC",i:ci});}else{const em=el.closest(".em"),ah=el.closest("#ah");if(em){GAME={...GAME,selCard:ci,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});}else if(ah){GAME={...GAME,selCard:ci,mode:"targeting"};act({t:"EH"});}}}
+function handDrop(ci,ins,el){
+  if(!GAME||!myTurn())return;
+  const card=(myHand()||[])[ci];
+  if(!card||card.cost>(myMana()||0))return;
+  if(card.type==="minion"){
+    if(el.closest("#pb")||el.closest(".board-slot-ghost"))act({t:"HC_AT",i:ci,slot:ins!=null?ins:(myBoard()||[]).length});
+  }else if(card.effect==="heal"||card.effect==="draw"||card.effect==="aoe"||card.effect==="random_destroy"){
+    act({t:"HC",i:ci});
+  }else{
+    const em=el.closest(".em"),ah=el.closest("#ah");
+    if(em){
+      if(MP?.role==="guest"){guestUI={...guestUI,selCard:ci,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});}
+      else{GAME={...GAME,selCard:ci,mode:"targeting"};act({t:"EM",i:+em.dataset.ei});}
+    }else if(ah){
+      if(MP?.role==="guest"){guestUI={...guestUI,selCard:ci,mode:"targeting"};act({t:"EH"});}
+      else{GAME={...GAME,selCard:ci,mode:"targeting"};act({t:"EH"});}
+    }
+  }
+}
 
 // ── PLAYER ATTACK ANIMATION ───────────
 function doPlayerAtk(bi,tw,ti){
