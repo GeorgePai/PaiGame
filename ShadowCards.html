@@ -1078,19 +1078,20 @@ function renderOpponentPresence(){
   if(!p||p.type!=="drag"){
     if(dragEl)dragEl.remove();
   }else{
-    // Position: mirror the drag position to top of screen
-    // Opponent drags from THEIR bottom — we show it at OUR top (their hand area)
-    const screenW=window.innerWidth;
-    // Horizontal: mirror x position relative to screen width
-    const mirrorX=screenW-p.x;
-    // Vertical: flip to top area (their bottom = our top)
-    const mirrorY=Math.max(40,window.innerHeight-p.y);
+    // Show card back in the AI hand area (top of screen), anchored to opponent's hand
+    // Use relative horizontal position mapped to our screen width
+    const sw=window.innerWidth;
+    // Opponent drags from bottom: map their x to our screen proportionally
+    const mirrorX=sw-(p.x/sw)*sw; // mirror horizontally
+    // Pin vertically to AI hand area (top ~10-20% of screen height)
+    const aiHand=document.querySelector(".ai-hand-wrap");
+    const aiHandY=aiHand?aiHand.getBoundingClientRect().top+aiHand.getBoundingClientRect().height/2:80;
     if(!dragEl){
       dragEl=document.createElement("div");dragEl.id="opp-drag";
-      dragEl.style.cssText="position:fixed;pointer-events:none;z-index:850;transition:left .07s linear,top .07s linear";
+      dragEl.style.cssText="position:fixed;pointer-events:none;z-index:850;transition:left .1s linear";
       document.body.appendChild(dragEl);
     }
-    dragEl.style.left=(mirrorX-30)+"px";dragEl.style.top=(mirrorY-50)+"px";
+    dragEl.style.left=(mirrorX-30)+"px";dragEl.style.top=(aiHandY-40)+"px";
     dragEl.innerHTML=cardBackSvg();
   }
 
@@ -1249,112 +1250,107 @@ function mpApplyGuestAction(a){
 }
 
 // ── MP ANIMATION DIFF ENGINE ────────────────────────────────────────────────
-// When Guest receives a new GAME state, diff old vs new and play all animations
-// Returns ms delay needed before render() can update DOM
-function mpAnimateDiff(oldG,newG){
-  if(!oldG||!newG)return 0;
+// Phase 1 (before render): only death anims — uses body-fixed clones, survives DOM rebuild
+// Phase 2 (after render): HP bars, floatDmg, sounds, summon effects — needs new DOM
+function mpAnimateDiff(oldG,newG,doAfter){
+  if(!oldG||!newG)return;
   const isGuest=MP?.role==="guest";
-  // In DOM: .om = own minions, .em = enemy minions
-  // Guest raw (before flip): own=GAME.ai, enemy=GAME.player
   const ownSide=isGuest?"ai":"player";
   const oppSide=isGuest?"player":"ai";
-  let maxDelay=0;
 
-  // ── HP changes ──────────────────────────────────────────────────────────
-  const ownHpOld=oldG[ownSide].hp,ownHpNew=newG[ownSide].hp;
-  const oppHpOld=oldG[oppSide].hp,oppHpNew=newG[oppSide].hp;
-  if(ownHpNew<ownHpOld){
-    // lagHp: ph=own for guest
-    lagHp["player"]=ownHpOld;
-    shakeHpBar("player",ownHpOld-ownHpNew);
-    floatDmgBar("ph",ownHpOld-ownHpNew,false);
-  }
-  if(oppHpNew<oppHpOld){
-    lagHp["ai"]=oppHpOld;
-    shakeHpBar("ai",oppHpOld-oppHpNew);
-    floatDmgBar("ah",oppHpOld-oppHpNew,false);
-  }
-
-  // ── Minion deaths on enemy board ─────────────────────────────────────────
+  // ── PHASE 1: Death animations on OLD DOM (body-fixed clones) ──────────────
+  const deaths=[];
   (oldG[oppSide].board||[]).forEach((oldM,i)=>{
     if(!(newG[oppSide].board||[]).find(m=>m.uid===oldM.uid)){
       const el=document.querySelector(`.em[data-ei="${i}"] .minion`)||document.querySelector(`.em[data-ei="${i}"]`);
-      if(el){Audio.sfxMinionDeath();playDeathAnim(el);maxDelay=Math.max(maxDelay,2000);}
-      // Also floatDmg
-      if(el){const r=el.getBoundingClientRect();setTimeout(()=>floatDmg(r.left+r.width/2,r.top,oldM.curHp),80);}
+      if(el){Audio.sfxMinionDeath();playDeathAnim(el);deaths.push({side:"opp",i,hp:oldM.curHp});}
     }
   });
-
-  // ── Minion deaths on own board ───────────────────────────────────────────
   (oldG[ownSide].board||[]).forEach((oldM,i)=>{
     if(!(newG[ownSide].board||[]).find(m=>m.uid===oldM.uid)){
       const el=document.querySelector(`.om[data-oi="${i}"] .minion`)||document.querySelector(`.om[data-oi="${i}"]`);
-      if(el){Audio.sfxMinionDeath();playDeathAnim(el);maxDelay=Math.max(maxDelay,2000);}
+      if(el){Audio.sfxMinionDeath();playDeathAnim(el);deaths.push({side:"own",i,hp:oldM.curHp});}
     }
   });
 
-  // ── Minion HP damage (floatDmg on surviving minions) ────────────────────
-  (newG[oppSide].board||[]).forEach(newM=>{
-    const oldM=(oldG[oppSide].board||[]).find(m=>m.uid===newM.uid);
-    if(oldM&&newM.curHp<oldM.curHp){
-      const idx=(oldG[oppSide].board||[]).findIndex(m=>m.uid===newM.uid);
-      const el=document.querySelector(`.em[data-ei="${idx}"] .minion`)||document.querySelector(`.em[data-ei="${idx}"]`);
-      if(el){const r=el.getBoundingClientRect();setTimeout(()=>floatDmg(r.left+r.width/2,r.top,oldM.curHp-newM.curHp),80);}
-    }
-  });
-  (newG[ownSide].board||[]).forEach(newM=>{
-    const oldM=(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid);
-    if(oldM&&newM.curHp<oldM.curHp){
-      const idx=(oldG[ownSide].board||[]).findIndex(m=>m.uid===newM.uid);
-      const el=document.querySelector(`.om[data-oi="${idx}"] .minion`)||document.querySelector(`.om[data-oi="${idx}"]`);
-      if(el){const r=el.getBoundingClientRect();setTimeout(()=>floatDmg(r.left+r.width/2,r.top,oldM.curHp-newM.curHp),80);}
-    }
-  });
+  // ── Delay render if deaths need to animate ────────────────────────────────
+  const deathDelay=deaths.length>0?1800:0;
 
-  // ── New minions summoned ─────────────────────────────────────────────────
-  (newG[ownSide].board||[]).forEach(newM=>{
-    if(!(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid)){
-      // New own minion
-      Audio.sfxMinionSummon();
-      newSummonUid=newM.uid;setTimeout(()=>{newSummonUid=null;},600);
-      if(newM.taunt){
-        setTimeout(()=>{
-          Audio.sfxTauntSummon();
-          document.querySelectorAll(".om .minion").forEach(el=>{
-            el.classList.add("taunt-flash");
-            setTimeout(()=>el.classList.remove("taunt-flash"),880);
-          });
-        },600);
-      }
-      if(newM.effect==="rally"){
-        const buffedCount=(newG[ownSide].board||[]).filter(m=>m.uid!==newM.uid).length;
-        if(buffedCount>0){
-          setTimeout(()=>{
-            Audio.sfxRallyTrigger();
-            document.querySelectorAll(".om .atk-tri").forEach((tri,i)=>{
-              setTimeout(()=>{Audio.sfxRallyBuff();tri.style.animation="none";void tri.offsetWidth;tri.style.animation="atkJelly .55s cubic-bezier(.3,1.4,.5,1)";},i*140);
-            });
-          },450);
+  const phase2=()=>{
+    // ── PHASE 2: Everything else on NEW DOM ────────────────────────────────
+    // HP bar animations — lagHp was already set before render, updateLagBars handles it
+    requestAnimationFrame(()=>{
+      updateLagBars();// Force immediate HP animation update
+
+      // floatDmg on surviving minions that took damage
+      (newG[oppSide].board||[]).forEach(newM=>{
+        const oldM=(oldG[oppSide].board||[]).find(m=>m.uid===newM.uid);
+        if(oldM&&newM.curHp<oldM.curHp){
+          const idx=(newG[oppSide].board||[]).findIndex(m=>m.uid===newM.uid);
+          const el=document.querySelector(`.em[data-ei="${idx}"] .minion`)||document.querySelector(`.em[data-ei="${idx}"]`);
+          if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,oldM.curHp-newM.curHp);}
         }
+      });
+      (newG[ownSide].board||[]).forEach(newM=>{
+        const oldM=(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid);
+        if(oldM&&newM.curHp<oldM.curHp){
+          const idx=(newG[ownSide].board||[]).findIndex(m=>m.uid===newM.uid);
+          const el=document.querySelector(`.om[data-oi="${idx}"] .minion`)||document.querySelector(`.om[data-oi="${idx}"]`);
+          if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,oldM.curHp-newM.curHp);}
+        }
+      });
+
+      // HP floatDmg on hero bars
+      const ownHpOld=oldG[ownSide].hp,ownHpNew=newG[ownSide].hp;
+      const oppHpOld=oldG[oppSide].hp,oppHpNew=newG[oppSide].hp;
+      if(ownHpNew<ownHpOld){floatDmgBar("ph",ownHpOld-ownHpNew,false);}
+      if(oppHpNew<oppHpOld){floatDmgBar("ah",oppHpOld-oppHpNew,false);}
+
+      // New minion summon effects
+      (newG[ownSide].board||[]).forEach(newM=>{
+        if(!(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid)){
+          Audio.sfxMinionSummon();
+          if(newM.taunt){
+            setTimeout(()=>{
+              Audio.sfxTauntSummon();
+              document.querySelectorAll(".om .minion").forEach(el=>{
+                el.classList.add("taunt-flash");setTimeout(()=>el.classList.remove("taunt-flash"),880);
+              });
+            },600);
+          }
+          if(newM.effect==="rally"&&(newG[ownSide].board||[]).length>1){
+            setTimeout(()=>{
+              Audio.sfxRallyTrigger();
+              document.querySelectorAll(".om .atk-tri").forEach((tri,i)=>{
+                setTimeout(()=>{Audio.sfxRallyBuff();tri.style.animation="none";void tri.offsetWidth;tri.style.animation="atkJelly .55s cubic-bezier(.3,1.4,.5,1)";},i*140);
+              });
+            },450);
+          }
+        }
+      });
+      (newG[oppSide].board||[]).forEach(newM=>{
+        if(!(oldG[oppSide].board||[]).find(m=>m.uid===newM.uid)){
+          Audio.sfxMinionSummon();
+          if(newM.taunt)setTimeout(()=>Audio.sfxTauntSummon(),600);
+        }
+      });
+
+      // Spell audio (detect by mana + hand changes)
+      const ownManaOld=oldG[ownSide].mana,ownManaNew=newG[ownSide].mana;
+      const oppManaOld=oldG[oppSide].mana,oppManaNew=newG[oppSide].mana;
+      const oppHandOld=(oldG[oppSide].hand||[]).length,oppHandNew=(newG[oppSide].hand||[]).length;
+      if(oppHandNew<oppHandOld&&oppManaNew<oppManaOld){Audio.sfxSpellCast();}
+
+      // Turn change
+      if(oldG.turn!==newG.turn){
+        const myTurnNow=(newG.turn===ownSide);
+        if(myTurnNow){setTimeout(()=>Audio.sfxTurnStart(),200);toast("你的回合！","ok");}
+        else Audio.sfxTurnStartAI();
       }
-    }
-  });
-  (newG[oppSide].board||[]).forEach(newM=>{
-    if(!(oldG[oppSide].board||[]).find(m=>m.uid===newM.uid)){
-      // New enemy minion
-      Audio.sfxMinionSummon();
-      if(newM.taunt)setTimeout(()=>Audio.sfxTauntSummon(),600);
-    }
-  });
+    });
+  };
 
-  // ── Turn change sounds ───────────────────────────────────────────────────
-  if(oldG.turn!==newG.turn){
-    const nowMyTurn=(newG.turn===ownSide);
-    if(nowMyTurn)setTimeout(()=>Audio.sfxTurnStart(),200);
-    else Audio.sfxTurnStartAI();
-  }
-
-  return maxDelay;
+  if(doAfter)doAfter(deathDelay,phase2);
 }
 
 function floatDmgBar(barId,dmg,heal){
@@ -1573,21 +1569,33 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
     db().ref(`rooms/${code}/game`).on("value",snap=>{
       const v=snap.val();if(!v)return;
       const newG=JSON.parse(v);
-      if(GAME){
-        // Fix lagHp for HP bar animations
-        if(newG.ai.hp<(GAME.ai.hp||50))lagHp["player"]=GAME.ai.hp;
-        if(newG.player.hp<(GAME.player.hp||50))lagHp["ai"]=GAME.player.hp;
-        // Play all animations from state diff BEFORE updating DOM
-        const delay=mpAnimateDiff(GAME,newG);
-        guestUI={selAtk:null,selCard:null,mode:"default"};
-        if(delay>100){
-          setTimeout(()=>{GAME=newG;render();},delay);
-        }else{
-          GAME=newG;render();
-        }
-      }else{
-        GAME=newG;guestUI={selAtk:null,selCard:null,mode:"default"};render();
-      }
+      if(!GAME){GAME=newG;guestUI={selAtk:null,selCard:null,mode:"default"};render();return;}
+
+      const oldG=GAME; // capture before mutation
+      // Set lagHp BEFORE render so updateLagBars animates correctly
+      const isGuest=MP?.role==="guest";
+      const ownSide=isGuest?"ai":"player";
+      const oppSide=isGuest?"player":"ai";
+      if(newG[ownSide].hp<(oldG[ownSide].hp||50))lagHp["player"]=oldG[ownSide].hp;
+      if(newG[oppSide].hp<(oldG[oppSide].hp||50))lagHp["ai"]=oldG[oppSide].hp;
+
+      // Find new summons for minionIn animation
+      const newSummons=(newG[ownSide].board||[]).filter(newM=>!(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid));
+      if(newSummons.length)newSummonUid=newSummons[0].uid;
+
+      // Phase 1 (old DOM): death animations + collect afterFn
+      mpAnimateDiff(oldG,newG,(deathDelay,phase2)=>{
+        const doRender=()=>{
+          GAME=newG;
+          guestUI={selAtk:null,selCard:null,mode:"default"};
+          render();
+          // Phase 2 (new DOM): HP bars, floatDmg, sounds, summon effects
+          setTimeout(phase2,80);
+          // Clear summonUid after animation
+          if(newSummons.length)setTimeout(()=>{newSummonUid=null;},700);
+        };
+        if(deathDelay>0)setTimeout(doRender,deathDelay);else doRender();
+      });
     });
   }
 }
