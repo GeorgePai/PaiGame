@@ -1028,40 +1028,120 @@ let MP=null;
 let MP_DECK=null;
 let guestUI={selAtk:null,selCard:null,mode:"default"};
 let _presenceThrottle=0;
-let _opponentDrag=null; // {x,y,cardName,sym,cost} from Firebase
+let _opponentPresence=null;
 
-function mpBroadcastDrag(info){
+// ── Presence data shape ──────────────────────────────────────────────────────
+// {type:"drag",  x,y}                    → opponent dragging card (show card back at top)
+// {type:"arrow", fx,fy,tx,ty,ready}      → opponent targeting arrow
+// {type:"attack",bi,tw,ti,atkDmg,defDmg} → opponent attack event
+
+function mpBroadcast(info){
   if(!MP?.roomCode)return;
-  const now=Date.now();if(now-_presenceThrottle<80)return; // throttle to ~12fps
+  const now=Date.now();if(now-_presenceThrottle<60)return;
   _presenceThrottle=now;
-  try{db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).set(info);}catch(e){}
+  try{db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).set({...info,ts:Date.now()});}catch(e){}
 }
-function mpClearDrag(){
+function mpBroadcastNow(info){
+  if(!MP?.roomCode)return;
+  try{db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).set({...info,ts:Date.now()});}catch(e){}
+}
+function mpClearPresence(){
   if(!MP?.roomCode)return;
   try{db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).remove();}catch(e){}
 }
+
 function mpListenPresence(code){
   const oppRole=MP.role==="host"?"guest":"host";
   db().ref(`rooms/${code}/presence/${oppRole}`).on("value",snap=>{
-    _opponentDrag=snap.val();
-    renderOpponentDrag();
+    _opponentPresence=snap.val();
+    renderOpponentPresence();
   });
 }
-function renderOpponentDrag(){
-  let el=document.getElementById("opp-drag");
-  if(!_opponentDrag){if(el)el.remove();return;}
-  const{x,y,cardName,sym,cost}=_opponentDrag;
-  if(!el){
-    el=document.createElement("div");el.id="opp-drag";
-    el.style.cssText="position:fixed;pointer-events:none;z-index:850;transition:left .08s,top .08s";
-    document.body.appendChild(el);
+
+// SVG card back (shown when opponent drags)
+function cardBackSvg(w=60,h=80){
+  return`<svg width="${w}" height="${h}" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
+    <rect width="60" height="80" rx="7" fill="#1a1030"/>
+    <rect x="3" y="3" width="54" height="74" rx="5" fill="none" stroke="#3a2060" stroke-width="1"/>
+    <rect x="6" y="6" width="48" height="68" rx="4" fill="none" stroke="#2a1050" stroke-width=".5"/>
+    <text x="30" y="44" dominant-baseline="central" text-anchor="middle" font-size="22" fill="#4a2080" font-family="monospace">◈</text>
+    <text x="30" y="62" dominant-baseline="central" text-anchor="middle" font-size="8" fill="#3a1060" font-family="monospace" letter-spacing="2">SHADOW</text>
+  </svg>`;
+}
+
+function renderOpponentPresence(){
+  // Card drag ghost — positioned at TOP (opponent's hand area from viewer's perspective)
+  let dragEl=document.getElementById("opp-drag");
+  const p=_opponentPresence;
+  if(!p||p.type!=="drag"){
+    if(dragEl)dragEl.remove();
+  }else{
+    // Position: mirror the drag position to top of screen
+    // Opponent drags from THEIR bottom — we show it at OUR top (their hand area)
+    const screenW=window.innerWidth;
+    // Horizontal: mirror x position relative to screen width
+    const mirrorX=screenW-p.x;
+    // Vertical: flip to top area (their bottom = our top)
+    const mirrorY=Math.max(40,window.innerHeight-p.y);
+    if(!dragEl){
+      dragEl=document.createElement("div");dragEl.id="opp-drag";
+      dragEl.style.cssText="position:fixed;pointer-events:none;z-index:850;transition:left .07s linear,top .07s linear";
+      document.body.appendChild(dragEl);
+    }
+    dragEl.style.left=(mirrorX-30)+"px";dragEl.style.top=(mirrorY-50)+"px";
+    dragEl.innerHTML=cardBackSvg();
   }
-  el.style.left=(x-30)+"px";el.style.top=(y-50)+"px";
-  el.innerHTML=`<div style="width:60px;height:80px;background:rgba(20,20,30,.88);border:1.5px solid rgba(124,58,237,.6);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:0 0 16px rgba(124,58,237,.35);opacity:.88">
-    <div style="font-size:16px;color:#ddd">${sym||"◈"}</div>
-    <div style="font-size:7px;color:#aaa;font-family:monospace;text-align:center;padding:0 3px;line-height:1.3">${cardName||""}</div>
-    <div style="font-size:9px;color:#a070e8;font-family:monospace">${cost!=null?cost:""}</div>
-  </div>`;
+
+  // Opponent arrow
+  let arrEl=document.getElementById("opp-arrow");
+  if(!p||p.type!=="arrow"){
+    if(arrEl)arrEl.remove();
+  }else{
+    if(!arrEl){
+      arrEl=document.createElement("div");arrEl.id="opp-arrow";
+      arrEl.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:840";
+      document.body.appendChild(arrEl);
+    }
+    // Mirror arrow: flip x (screenW-x) and y (screenH-y) for both points
+    const sw=window.innerWidth,sh=window.innerHeight;
+    const fx2=sw-p.fx,fy2=sh-p.fy,tx2=sw-p.tx,ty2=sh-p.ty;
+    const col=p.ready?"rgba(255,148,42,.85)":"rgba(255,148,42,.5)";
+    const dx=tx2-fx2,dy=ty2-fy2,len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dx/len,ny=dy/len;
+    const ex=tx2-nx*18,ey=ty2-ny*18;
+    arrEl.innerHTML=`<svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="oa" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+        <polygon points="0,0 8,4 0,8" fill="${col}"/></marker></defs>
+      <line x1="${fx2}" y1="${fy2}" x2="${ex}" y2="${ey}" stroke="${col}" stroke-width="3" stroke-linecap="round" marker-end="url(#oa)" opacity=".8"/>
+    </svg>`;
+  }
+
+  // Opponent attack animation
+  if(p?.type==="attack"&&p.ts&&Date.now()-p.ts<2000){
+    // Play attack animation from opponent's perspective on our board
+    // bi = attacker index on opponent board (our enemy board)
+    // tw="ai" = opponent targeting us → their attacker on em, our minion on om or ah
+    const isGuest=MP?.role==="guest";
+    // From our view: opponent's attacker is on .em (top), target is on .om or our hp bar
+    setTimeout(()=>{
+      const atkEl=document.querySelector(`.em[data-ei="${p.bi}"] .minion`)||document.querySelector(`.em[data-ei="${p.bi}"]`);
+      let defEl;
+      if(p.ti===-1){defEl=document.getElementById("ph");}
+      else{defEl=document.querySelector(`.om[data-oi="${p.ti}"] .minion`)||document.querySelector(`.om[data-oi="${p.ti}"]`);}
+      if(atkEl&&defEl){
+        Audio.sfxMinionAttack();
+        // Simple visual flash on defender
+        if(defEl){defEl.style.animation="none";void defEl.offsetWidth;defEl.style.animation="rdyPulse .3s ease-out 2";}
+        if(p.ti===-1)shakeHpBar("player",Math.abs(p.atkDmg||2));
+        else shakeHpBar("player",Math.abs(p.atkDmg||2));
+        if(p.defDmg&&p.defDmg>0)shakeHpBar("ai",p.defDmg);
+        if(p.atkDmg)setTimeout(()=>{
+          if(atkEl)floatDmg(atkEl.getBoundingClientRect().left+atkEl.getBoundingClientRect().width/2,atkEl.getBoundingClientRect().top,Math.abs(p.defDmg||0));
+          if(defEl)floatDmg(defEl.getBoundingClientRect().left+defEl.getBoundingClientRect().width/2,defEl.getBoundingClientRect().top,Math.abs(p.atkDmg||0));
+        },120);
+      }
+    },80);
+  }
 }
 
 const MP_DECKS=[
@@ -1078,11 +1158,11 @@ function mpCleanup(){
     db().ref(`rooms/${MP.roomCode}/guestAction`).off();
     db().ref(`rooms/${MP.roomCode}/game`).off();
     db().ref(`rooms/${MP.roomCode}/status`).off();
-    db().ref(`rooms/${MP.roomCode}/presence`).off();
+    db().ref(`rooms/${MP.roomCode}/presence`).off();db().ref(`rooms/${MP.roomCode}/connected`).off();if(MP.role)db().ref(`rooms/${MP.roomCode}/connected/${MP.role}`).remove();
     if(MP.role)db().ref(`rooms/${MP.roomCode}/presence/${MP.role}`).remove();
   }}catch(e){}
   if(window._lobbyRef){try{window._lobbyRef.off();}catch(e){}window._lobbyRef=null;}
-  _opponentDrag=null;renderOpponentDrag();
+  _opponentPresence=null;const _od=document.getElementById("opp-drag");if(_od)_od.remove();const _oa=document.getElementById("opp-arrow");if(_oa)_oa.remove();
   MP=null;
 }
 
@@ -1261,7 +1341,7 @@ function showLobby(){
         <div style="width:38px;height:38px;border-radius:50%;background:rgba(124,58,237,.1);border:1px solid #2a1a4a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="16" height="18" viewBox="0 0 18 20"><circle cx="9" cy="5" r="4" fill="#7c3aed"/><path d="M1,20 Q1,12 9,12 Q17,12 17,20" fill="#7c3aed"/></svg>
         </div>
-        <div style="flex:1"><div style="font-size:12px;color:#aaa;font-family:monospace;font-weight:bold;letter-spacing:1px">房間 ${code}</div><div style="font-size:10px;color:#333;font-family:monospace;margin-top:2px">${t} 建立</div></div>
+        <div style="flex:1"><div style="font-size:12px;color:#ccc;font-family:monospace;font-weight:bold;letter-spacing:.5px">${r.roomName||"無名房間"}</div><div style="font-size:9px;color:#444;font-family:monospace;margin-top:2px">房間 ${code} · ${t}</div></div>
         <div style="padding:5px 12px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.35);border-radius:3px;font-size:10px;color:#a070e8;font-family:monospace;letter-spacing:1px">加入</div>
       </div>`;
     }).join("");
@@ -1271,12 +1351,16 @@ function showLobby(){
 // ── MP Room Management ──────────────────────────────────────────────────────
 function createMpRoom(){
   if(!MP_DECK){toast("請先選擇牌組","err");return;}
+  const name=prompt("為你的房間命名（最多12字）","").trim().slice(0,12)||"無名房間";
   const code=genCode();
-  db().ref(`rooms/${code}`).set({status:"waiting",createdAt:Date.now(),hostDeck:MP_DECK})
+  db().ref(`rooms/${code}`).set({status:"waiting",createdAt:Date.now(),hostDeck:MP_DECK,roomName:name})
   .then(()=>{
     if(window._lobbyRef){window._lobbyRef.off();window._lobbyRef=null;}
     MP={role:"host",roomCode:code};
-    showWaitingRoom(code);
+    showWaitingRoom(code,name);
+    // Set disconnect cleanup
+    db().ref(`rooms/${code}/connected/host`).set(true);
+    db().ref(`rooms/${code}/connected/host`).onDisconnect().remove();
     // Listen for guest joining
     db().ref(`rooms/${code}/status`).on("value",snap=>{
       if(snap.val()==="playing"){
@@ -1298,16 +1382,23 @@ function joinMpRoom(code){
     if(!d||d.status!=="waiting"){toast("此房間已開始或不存在","err");return;}
     if(window._lobbyRef){window._lobbyRef.off();window._lobbyRef=null;}
     db().ref(`rooms/${code}`).update({status:"playing",guestDeck:MP_DECK})
-    .then(()=>{MP={role:"guest",roomCode:code};startMpGame("guest",code,d.hostDeck,MP_DECK);})
+    .then(()=>{
+      MP={role:"guest",roomCode:code};
+      // Set disconnect cleanup
+      db().ref(`rooms/${code}/connected/guest`).set(true);
+      db().ref(`rooms/${code}/connected/guest`).onDisconnect().remove();
+      startMpGame("guest",code,d.hostDeck,MP_DECK);
+    })
     .catch(()=>toast("加入失敗","err"));
   });
 }
 
-function showWaitingRoom(code){
+function showWaitingRoom(code,name=""){
   R().innerHTML=`<div style="height:100vh;background:#080808;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;box-sizing:border-box">
     <div style="font-size:36px;animation:spin 4s linear infinite;color:#3a1a6a;opacity:.7">◈</div>
     <div style="font-size:11px;color:#555;font-family:monospace;letter-spacing:3px">等待對手加入中</div>
-    <div style="font-size:10px;color:#2a2a2a;font-family:monospace;padding:7px 18px;border:1px solid #1e1e1e;border-radius:3px;letter-spacing:3px">房間 ${code}</div>
+    ${name?`<div style="font-size:13px;color:#888;font-family:monospace;font-weight:bold">${name}</div>`:""}
+    <div style="font-size:10px;color:#2a2a2a;font-family:monospace;padding:7px 18px;border:1px solid #1e1e1e;border-radius:3px;letter-spacing:3px">房間代碼 ${code}</div>
     <button onclick="cancelMpRoom('${code}')" style="margin-top:8px;padding:8px 22px;background:transparent;border:1px solid #1a1a1a;color:#444;font-size:11px;letter-spacing:2px;border-radius:2px">取消</button>
   </div>`;
 }
@@ -1320,6 +1411,23 @@ function cancelMpRoom(code){
 // ── MP Game Start ───────────────────────────────────────────────────────────
 function startMpGame(role,code,hostDeckIds,guestDeckIds){
   MP={role,roomCode:code,myDeckIds:role==="host"?hostDeckIds:guestDeckIds};
+
+  // Items 6-7: Disconnect detection
+  const oppRole=role==="host"?"guest":"host";
+  db().ref(`rooms/${code}/connected/${oppRole}`).on("value",snap=>{
+    if(snap.val()===null&&GAME&&!GAME.over){
+      // Opponent disconnected
+      if(role==="host"){
+        toast("對手已離開，你獲得勝利！","ok");
+        GAME={...GAME,over:"win"};render();
+        setTimeout(()=>{try{db().ref(`rooms/${code}`).remove();}catch(e){}mpCleanup();SCR="menu";render();},3000);
+      }else{
+        toast("房主已離開，你獲得勝利！","ok");
+        GAME={...GAME,over:"win"};render();
+        setTimeout(()=>{mpCleanup();showLobby();},3000);
+      }
+    }
+  });
   if(role==="host"){
     // Host creates initial GAME
     const pd=shuf(hostDeckIds).map(id=>mk(getDef(id)));
@@ -1926,6 +2034,7 @@ function buildDeck(){
         ${chart}
       </div>
       <div class="dlist-body"><div style="margin-top:8px">${li}</div></div>
+      <div id="deck-mgmt" style="margin-top:10px;padding-top:8px;border-top:1px solid #111"></div>
     </div>
   </div></div>`;
 
@@ -1968,8 +2077,25 @@ function buildDeck(){
     const existing=loadSavedDecks();
     if(existing.length>=5){toast("最多只能儲存5副牌組","err");return;}
     saveSavedDecks([...existing,{name:name.slice(0,10),ids:[...deckEdit]}]);
-    toast("牌組已儲存："+name.slice(0,10),"ok");
+    toast("已儲存："+name.slice(0,10),"ok");
+    buildDeck(); // refresh to show updated list
   };
+
+  // Item 8: Show saved decks management panel
+  const mgmtEl=document.getElementById("deck-mgmt");
+  if(mgmtEl){
+    const saved=loadSavedDecks();
+    if(!saved.length){mgmtEl.innerHTML=`<div style="font-size:9px;color:#2a2a2a;font-family:monospace;text-align:center;padding:6px 0">尚未儲存任何自定義牌組</div>`;return;}
+    mgmtEl.innerHTML=`<div style="font-size:8px;color:#444;font-family:monospace;letter-spacing:2px;margin-bottom:6px">已儲存的牌組</div>`+
+      saved.map((d,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:3px;margin-bottom:4px">
+        <div style="flex:1">
+          <div style="font-size:10px;color:#888;font-family:monospace;font-weight:bold">${d.name}</div>
+          <div style="font-size:8px;color:#333;font-family:monospace">${d.ids.length}張</div>
+        </div>
+        <button onclick="if(confirm('確定刪除「${d.name}」?')){const s=loadSavedDecks();s.splice(${i},1);saveSavedDecks(s);toast('已刪除','ok');buildDeck();}" style="padding:3px 8px;background:rgba(180,30,30,.15);border:1px solid #3a1010;color:#883030;font-size:9px;border-radius:2px;letter-spacing:1px">刪除</button>
+        <button onclick="DECK=[...getAllDecks()[${i+1}].ids];toast('已載入：${d.name}','ok')" style="padding:3px 8px;background:rgba(30,30,80,.2);border:1px solid #1a1a4a;color:#4444aa;font-size:9px;border-radius:2px;letter-spacing:1px">載入</button>
+      </div>`).join("");
+  }
 
   // Pool card interactions
   document.querySelectorAll(".pc[data-id]").forEach(card=>{
@@ -2327,10 +2453,8 @@ function onMove(e){
   const dist=Math.sqrt(ddx*ddx+ddy*ddy);
   // Fix 1: minion needs 50px drag distance, spells need 22px, board attacks need 10px
   const dragCard=drag.type==="hand"?(myHand()||[])[drag.cardIdx]:null;
-  // MP: broadcast drag position for opponent to see
-  if(MP&&drag.dragging&&dragCard){
-    mpBroadcastDrag({x:p.x,y:p.y,cardName:dragCard.name,sym:dragCard.sym,cost:dragCard.cost});
-  }
+  // MP: broadcast drag position for opponent to see (card back at mirrored position)
+  if(MP&&drag.dragging)mpBroadcast({type:"drag",x:p.x,y:p.y});
   const threshold=drag.type==="board"?10:dragCard&&dragCard.type!=="minion"?22:50;
   // Fix 1: use smaller threshold when zoom is showing (20px feels natural for swipe)
   const swipeThreshold=drag.wasLP?20:threshold;
@@ -2440,7 +2564,7 @@ function onUp(e){
   const p=pt(e,true);
   const savedStartY=drag.startY; // save before reset!
   drag={active:false,type:"none",cardIdx:-1,boardIdx:-1,startX:0,startY:0,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false,invalid:false};
-  if(MP)mpClearDrag();
+  if(MP)mpClearPresence();
   if(type==="hand"){
     const card=GAME&&(myHand()||[])[sc];
     if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>myMana()){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
@@ -2615,6 +2739,8 @@ function updateProxArrow(fx,fy){
       stroke="url(#${gid})" stroke-width="4.5" fill="none" stroke-linecap="round" marker-end="url(#arh)"/>
     ${rdy?"":""}
   </svg>`;
+  // MP: broadcast arrow so opponent can see targeting
+  if(MP)mpBroadcast({type:"arrow",fx,fy,tx,ty,ready:rdy});
 }
 function hideArrow(){
   document.querySelectorAll(".drop-ready").forEach(e=>{e.classList.remove("drop-ready");});
@@ -2669,6 +2795,8 @@ function doPlayerAtk(bi,tw,ti){
   const ns={...atkF(g,"player",bi,tw,ti),selAtk:null,mode:"default"};
   const def=ti!==-1?g.ai.board[ti]:null,defDmg=atk.atk,atkDmg=def?def.atk:0;
   const defDies=ti!==-1?!ns.ai.board.find(m=>m.uid===(def&&def.uid)):false,atkDies=!ns.player.board.find(m=>m.uid===atk.uid);
+  // MP: broadcast attack so opponent sees animation
+  if(MP)mpBroadcastNow({type:"attack",bi,tw:"ai",ti,atkDmg:defDmg,defDmg:atkDmg,ts:Date.now()});
   const atkEl=document.querySelector(`.om[data-oi="${bi}"] .minion`);
   const defEl=ti===-1?document.getElementById("ah"):(document.querySelector(`.em[data-ei="${ti}"] .minion`)||document.querySelector(`.em[data-ei="${ti}"]`));
   animLock=true;
