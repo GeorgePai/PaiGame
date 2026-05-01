@@ -1248,8 +1248,120 @@ function mpApplyGuestAction(a){
   if(ng){GAME=ng;mpSave();render();}
 }
 
+// ── MP ANIMATION DIFF ENGINE ────────────────────────────────────────────────
+// When Guest receives a new GAME state, diff old vs new and play all animations
+// Returns ms delay needed before render() can update DOM
+function mpAnimateDiff(oldG,newG){
+  if(!oldG||!newG)return 0;
+  const isGuest=MP?.role==="guest";
+  // In DOM: .om = own minions, .em = enemy minions
+  // Guest raw (before flip): own=GAME.ai, enemy=GAME.player
+  const ownSide=isGuest?"ai":"player";
+  const oppSide=isGuest?"player":"ai";
+  let maxDelay=0;
+
+  // ── HP changes ──────────────────────────────────────────────────────────
+  const ownHpOld=oldG[ownSide].hp,ownHpNew=newG[ownSide].hp;
+  const oppHpOld=oldG[oppSide].hp,oppHpNew=newG[oppSide].hp;
+  if(ownHpNew<ownHpOld){
+    // lagHp: ph=own for guest
+    lagHp["player"]=ownHpOld;
+    shakeHpBar("player",ownHpOld-ownHpNew);
+    floatDmgBar("ph",ownHpOld-ownHpNew,false);
+  }
+  if(oppHpNew<oppHpOld){
+    lagHp["ai"]=oppHpOld;
+    shakeHpBar("ai",oppHpOld-oppHpNew);
+    floatDmgBar("ah",oppHpOld-oppHpNew,false);
+  }
+
+  // ── Minion deaths on enemy board ─────────────────────────────────────────
+  (oldG[oppSide].board||[]).forEach((oldM,i)=>{
+    if(!(newG[oppSide].board||[]).find(m=>m.uid===oldM.uid)){
+      const el=document.querySelector(`.em[data-ei="${i}"] .minion`)||document.querySelector(`.em[data-ei="${i}"]`);
+      if(el){Audio.sfxMinionDeath();playDeathAnim(el);maxDelay=Math.max(maxDelay,2000);}
+      // Also floatDmg
+      if(el){const r=el.getBoundingClientRect();setTimeout(()=>floatDmg(r.left+r.width/2,r.top,oldM.curHp),80);}
+    }
+  });
+
+  // ── Minion deaths on own board ───────────────────────────────────────────
+  (oldG[ownSide].board||[]).forEach((oldM,i)=>{
+    if(!(newG[ownSide].board||[]).find(m=>m.uid===oldM.uid)){
+      const el=document.querySelector(`.om[data-oi="${i}"] .minion`)||document.querySelector(`.om[data-oi="${i}"]`);
+      if(el){Audio.sfxMinionDeath();playDeathAnim(el);maxDelay=Math.max(maxDelay,2000);}
+    }
+  });
+
+  // ── Minion HP damage (floatDmg on surviving minions) ────────────────────
+  (newG[oppSide].board||[]).forEach(newM=>{
+    const oldM=(oldG[oppSide].board||[]).find(m=>m.uid===newM.uid);
+    if(oldM&&newM.curHp<oldM.curHp){
+      const idx=(oldG[oppSide].board||[]).findIndex(m=>m.uid===newM.uid);
+      const el=document.querySelector(`.em[data-ei="${idx}"] .minion`)||document.querySelector(`.em[data-ei="${idx}"]`);
+      if(el){const r=el.getBoundingClientRect();setTimeout(()=>floatDmg(r.left+r.width/2,r.top,oldM.curHp-newM.curHp),80);}
+    }
+  });
+  (newG[ownSide].board||[]).forEach(newM=>{
+    const oldM=(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid);
+    if(oldM&&newM.curHp<oldM.curHp){
+      const idx=(oldG[ownSide].board||[]).findIndex(m=>m.uid===newM.uid);
+      const el=document.querySelector(`.om[data-oi="${idx}"] .minion`)||document.querySelector(`.om[data-oi="${idx}"]`);
+      if(el){const r=el.getBoundingClientRect();setTimeout(()=>floatDmg(r.left+r.width/2,r.top,oldM.curHp-newM.curHp),80);}
+    }
+  });
+
+  // ── New minions summoned ─────────────────────────────────────────────────
+  (newG[ownSide].board||[]).forEach(newM=>{
+    if(!(oldG[ownSide].board||[]).find(m=>m.uid===newM.uid)){
+      // New own minion
+      Audio.sfxMinionSummon();
+      newSummonUid=newM.uid;setTimeout(()=>{newSummonUid=null;},600);
+      if(newM.taunt){
+        setTimeout(()=>{
+          Audio.sfxTauntSummon();
+          document.querySelectorAll(".om .minion").forEach(el=>{
+            el.classList.add("taunt-flash");
+            setTimeout(()=>el.classList.remove("taunt-flash"),880);
+          });
+        },600);
+      }
+      if(newM.effect==="rally"){
+        const buffedCount=(newG[ownSide].board||[]).filter(m=>m.uid!==newM.uid).length;
+        if(buffedCount>0){
+          setTimeout(()=>{
+            Audio.sfxRallyTrigger();
+            document.querySelectorAll(".om .atk-tri").forEach((tri,i)=>{
+              setTimeout(()=>{Audio.sfxRallyBuff();tri.style.animation="none";void tri.offsetWidth;tri.style.animation="atkJelly .55s cubic-bezier(.3,1.4,.5,1)";},i*140);
+            });
+          },450);
+        }
+      }
+    }
+  });
+  (newG[oppSide].board||[]).forEach(newM=>{
+    if(!(oldG[oppSide].board||[]).find(m=>m.uid===newM.uid)){
+      // New enemy minion
+      Audio.sfxMinionSummon();
+      if(newM.taunt)setTimeout(()=>Audio.sfxTauntSummon(),600);
+    }
+  });
+
+  // ── Turn change sounds ───────────────────────────────────────────────────
+  if(oldG.turn!==newG.turn){
+    const nowMyTurn=(newG.turn===ownSide);
+    if(nowMyTurn)setTimeout(()=>Audio.sfxTurnStart(),200);
+    else Audio.sfxTurnStartAI();
+  }
+
+  return maxDelay;
+}
+
+function floatDmgBar(barId,dmg,heal){
+  const el=document.getElementById(barId);
+  if(el){const r=el.getBoundingClientRect();floatDmg(r.left+r.width/2,r.top,dmg,heal);}
+}
 function mpSave(){
-  if(!MP||MP.role!=="host"||!GAME)return;
   try{db().ref(`rooms/${MP.roomCode}/game`).set(JSON.stringify(GAME));}catch(e){}
 }
 
@@ -1462,13 +1574,20 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
       const v=snap.val();if(!v)return;
       const newG=JSON.parse(v);
       if(GAME){
-        // Guest: lagHp["player"]→ph→GAME.ai.hp(own), lagHp["ai"]→ah→GAME.player.hp(opponent)
-        if(newG.ai.hp < (GAME.ai.hp||50))lagHp["player"]=GAME.ai.hp;      // own hp dropped
-        if(newG.player.hp < (GAME.player.hp||50))lagHp["ai"]=GAME.player.hp; // opponent hp dropped
+        // Fix lagHp for HP bar animations
+        if(newG.ai.hp<(GAME.ai.hp||50))lagHp["player"]=GAME.ai.hp;
+        if(newG.player.hp<(GAME.player.hp||50))lagHp["ai"]=GAME.player.hp;
+        // Play all animations from state diff BEFORE updating DOM
+        const delay=mpAnimateDiff(GAME,newG);
+        guestUI={selAtk:null,selCard:null,mode:"default"};
+        if(delay>100){
+          setTimeout(()=>{GAME=newG;render();},delay);
+        }else{
+          GAME=newG;render();
+        }
+      }else{
+        GAME=newG;guestUI={selAtk:null,selCard:null,mode:"default"};render();
       }
-      GAME=newG;
-      guestUI={selAtk:null,selCard:null,mode:"default"};
-      render();
     });
   }
 }
@@ -2551,6 +2670,7 @@ function onMove(e){
   // Fix 1: use smaller threshold when zoom is showing (20px feels natural for swipe)
   const swipeThreshold=drag.wasLP?20:threshold;
   if(!drag.dragging&&dist>swipeThreshold){
+    if(drag.noAction&&dist>20){toast("還不是你的回合","warn");return;}// Fix 2
     if(drag.wasLP){
       const adx=Math.abs(p.x-drag.startX),ady=Math.abs(p.y-drag.startY);
       if(adx>ady){
@@ -2659,8 +2779,12 @@ function onUp(e){
   if(MP)mpClearPresence();
   if(type==="hand"){
     const card=GAME&&(myHand()||[])[sc];
-    if(!wd&&!zOpen&&!wasLP){if(card&&card.cost>myMana()){toast("魔力不足！","err");}else act({t:"HC",i:sc});}
+    if(!wd&&!zOpen&&!wasLP){
+      if(!myTurn()){return;} // Fix 1: not our turn, no tap action, no toast
+      if(card&&card.cost>myMana()){toast("魔力不足！","err");}else act({t:"HC",i:sc});
+    }
     else if(wd){
+      if(!myTurn()){return;}// Fix 1
       if(card&&card.cost>myMana()){toast("魔力不足！","err");return;}
       if(card&&card.type==="minion"&&(myBoard()||[]).length>=7){toast("戰場已滿！","err");return;}
       if(card&&card.type==="minion"){
