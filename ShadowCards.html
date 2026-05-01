@@ -833,7 +833,9 @@ const chk=s=>{
 };
 const draw1=(s,who)=>{const p=s[who];if(!p.deck.length){return chk(alog({...s,[who]:{...p,hp:p.hp-5}},"💀"+(who==="player"?"你":"AI")+"牌庫空-5HP"));}const[d,...rest]=p.deck;if(p.hand.length>=10)return alog({...s,[who]:{...p,deck:rest}},d.name+"燒毀");return who==="player"?alog({...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},lastDraws:[...(s.lastDraws||[]),d.uid]},"🃏抽："+d.name):{...s,[who]:{...p,deck:rest,hand:[...p.hand,d]},aiNewCard:true};};
 const startT=(s0,who)=>{const p=s0[who],nm=Math.min(10,p.maxMana+1);let s={...s0,[who]:{...p,maxMana:nm,mana:nm,board:p.board.map(m=>({...m,sick:false,attacked:false}))},turn:who,mode:"default",selCard:null,selAtk:null,lastDraws:[],aiNewCard:false};s=draw1(s,who);if(!s.over)s=alog(s,"━━"+(who==="player"?"你的回合":"電腦回合")+"━━");
-if(who==="player")setTimeout(()=>Audio.sfxTurnStart(),200);
+// Turn notification: "你的回合" when it's the LOCAL player's turn
+const isMyTurn=(who==="player"&&!MP)||(who==="player"&&MP?.role==="host")||(who==="ai"&&MP?.role==="guest");
+if(isMyTurn)setTimeout(()=>Audio.sfxTurnStart(),200);
 return s;};
 const playM=(s0,hi,who)=>{const p=s0[who],c=p.hand[hi];if(!c||c.type!=="minion"||p.mana<c.cost||p.board.length>=7)return s0;const mn={...c,uid:uid(),curHp:c.hp,sick:true,attacked:false};return alog({...s0,[who]:{...p,mana:p.mana-c.cost,hand:p.hand.filter((_,i)=>i!==hi),board:[...p.board,mn]}},"⚔️"+(who==="player"?"你":"AI")+"召："+c.name);};
 const castS=(s0,hi,who,tw,ti)=>{
@@ -1954,7 +1956,71 @@ function updateLagBars(){
     }
   });
 }
-function showDeck(){deckEdit=[...DECK];buildDeck();}
+// ── DECK MANAGEMENT SCREEN ───────────────────────────────────────────────────
+function showDecks(){
+  const allDecks=getAllDecks();
+  const cards=allDecks.map(d=>{
+    const isDefault=!!d.isDefault;
+    const avg=(d.ids.reduce((s,id)=>{const c=getDef(id);return s+(c?.cost||0);},0)/Math.max(1,d.ids.length)).toFixed(1);
+    return{...d,avg,isDefault};
+  });
+  R().innerHTML=`<div style="height:100vh;background:#080808;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:1px solid #111;display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <button onclick="Audio.sfxClick();SCR='menu';render()" style="padding:6px 12px;background:transparent;border:1px solid #1a1a1a;color:#555;font-size:11px;border-radius:2px;letter-spacing:1px">← 返回</button>
+      <div style="font-size:13px;color:#888;letter-spacing:3px;font-family:monospace;flex:1">我的牌組</div>
+      <button id="new-deck-btn" style="padding:7px 14px;background:#ede9dc;color:#0a0a0a;border:none;font-size:11px;letter-spacing:2px;border-radius:2px;font-weight:bold">＋ 新增牌組</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 18px">
+      <div id="deck-list">
+        ${cards.map((d,i)=>`<div style="background:#0e0e0e;border:1px solid #1a1a1a;border-radius:6px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;color:${d.isDefault?"#666":"#ccc"};font-family:monospace;font-weight:bold;letter-spacing:.5px">${d.name}${d.isDefault?"  <span style='font-size:9px;color:#333;font-weight:normal'>(系統默認)</span>":""}</div>
+            <div style="font-size:9px;color:#333;font-family:monospace;margin-top:3px">${d.ids.length}張 · 平均費用 ${d.avg}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="Audio.sfxClick();deckEdit=[...getAllDecks()[${i}].ids];window._editingDeckIdx=${i};SCR='deck';render()" style="padding:5px 10px;background:rgba(60,60,180,.15);border:1px solid #1a1a5a;color:#6666cc;font-size:10px;border-radius:2px;letter-spacing:1px">編輯</button>
+            <button onclick="deleteUserDeck(${i})" style="padding:5px 10px;background:rgba(140,20,20,.15);border:1px solid #3a1010;color:#884444;font-size:10px;border-radius:2px;letter-spacing:1px">刪除</button>
+          </div>
+        </div>`).join("")}
+      </div>
+      <div style="text-align:center;padding:12px 0;font-size:9px;color:#222;font-family:monospace;letter-spacing:1px">最多可儲存 ${5-loadSavedDecks().length} 副自定義牌組</div>
+    </div>
+  </div>`;
+  document.getElementById("new-deck-btn").onclick=()=>{
+    Audio.sfxClick();
+    if(loadSavedDecks().length>=5){toast("已達5副牌組上限","err");return;}
+    deckEdit=[];window._editingDeckIdx=-1;SCR="deck";render();
+  };
+}
+window.deleteUserDeck=function(i){
+  const allDecks=getAllDecks();
+  const d=allDecks[i];
+  if(!d){return;}
+  if(d.isDefault){
+    // Delete default deck = hide it
+    saveSavedDecks([{...DEFAULT_SAVED_DECK,hidden:true},...loadSavedDecks().filter(dd=>!dd.hidden)]);
+    toast("已刪除系統默認牌組","ok");
+  }else{
+    const saved=loadSavedDecks();
+    // i=0 is default, so saved index is i-1
+    const savedIdx=i-1;
+    saved.splice(savedIdx,1);
+    saveSavedDecks(saved);
+    toast("已刪除牌組","ok");
+  }
+  SCR="decks";render();
+};
+
+// Override getAllDecks to respect hidden default
+const _origGetAllDecks=getAllDecks;
+function getAllDecks(){
+  const saved=loadSavedDecks();
+  const defaultHidden=saved.some(d=>d.hidden);
+  if(defaultHidden){return saved.filter(d=>!d.hidden);}
+  return[DEFAULT_SAVED_DECK,...saved];
+}
+
+function showDeck(){deckEdit=deckEdit.length?deckEdit:[...DECK];buildDeck();}
 function buildDeck(){
   if(!window._deckTab)window._deckTab="minion";
   const tab=window._deckTab;
@@ -2072,8 +2138,8 @@ function buildDeck(){
   }));
   _prevBarH=targetHeights.map(t=>t?.h??0);
 
-  document.getElementById("dbk").onclick=()=>{_prevBarH=null;Audio.sfxClick();SCR="menu";render();};
-  document.getElementById("dsv").onclick=()=>{if(tot===30){Audio.sfxClick();DECK=[...deckEdit];SCR="menu";render();}};
+  document.getElementById("dbk").onclick=()=>{_prevBarH=null;Audio.sfxClick();SCR="decks";render();};
+  document.getElementById("dsv").onclick=()=>{if(tot!==30){toast("需要30張才能儲存","err");return;}Audio.sfxClick();DECK=[...deckEdit];const ei=window._editingDeckIdx??-1;if(ei>0){const sv=loadSavedDecks();const si=ei-1;if(si>=0&&si<sv.length){sv[si].ids=[...deckEdit];saveSavedDecks(sv);}toast("已儲存","ok");}SCR="decks";render();};
   document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;Audio.sfxClick();deckEdit=[];buildDeck();};
   const saveDeckBtn=document.getElementById("dsave-custom");
   if(saveDeckBtn)saveDeckBtn.onclick=()=>{
@@ -2084,7 +2150,7 @@ function buildDeck(){
     if(existing.length>=5){toast("最多只能儲存5副牌組","err");return;}
     saveSavedDecks([...existing,{name:name.slice(0,10),ids:[...deckEdit]}]);
     toast("已儲存："+name.slice(0,10),"ok");
-    buildDeck(); // refresh to show updated list
+    buildDeck();
   };
 
   // Item 8: Show saved decks management panel
@@ -2206,7 +2272,7 @@ function showMenu(){
   </div>`;
   document.getElementById("bs").onclick=()=>{Audio.sfxClick();showDeckSelect(ids=>{DECK=[...ids];GAME=newGame(DECK);SCR="battle";stopFireflies();render();});};
   document.getElementById("bm").onclick=()=>{Audio.sfxClick();showDeckSelect(ids=>{MP_DECK=ids;showMultiDeckSelect(ids);});};
-  document.getElementById("bd").onclick=()=>{Audio.sfxClick();SCR="deck";stopFireflies();render();};
+  document.getElementById("bd").onclick=()=>{Audio.sfxClick();SCR="decks";stopFireflies();render();};
 
   // Purple title glow — slow breathing ~3s cycle
   const title=document.getElementById("menu-title");
@@ -2237,8 +2303,18 @@ function showBattle(){
     const viewDeckBtn=document.getElementById("view-ai-deck");
     if(viewDeckBtn)viewDeckBtn.onclick=()=>{
       Audio.sfxClick();
-      const deckIdx=GAME.ai.deckIdx??0;
-      const deckDefs=(MP?[]:AI_DECKS[deckIdx]||AI_DECKS[0]).map?.(id=>getDef(id)).filter(Boolean)||[];
+      let deckDefs;
+      if(MP){
+        // MP: reconstruct from all known opponent cards (hand + deck + board)
+        const oppSide=MP.role==="guest"?GAME.player:GAME.ai;
+        const allCards=[...(oppSide.hand||[]),...(oppSide.deck||[]),...(oppSide.board||[]).map(m=>getDef(m.id)).filter(Boolean)];
+        deckDefs=allCards.map(c=>getDef(c.id||c.uid)&&getDef(c.id||c.uid)).filter(Boolean);
+        // Also try direct getDef
+        deckDefs=allCards.map(c=>{const d=getDef(c.id);return d||null;}).filter(Boolean);
+      }else{
+        const deckIdx=GAME.ai.deckIdx??0;
+        deckDefs=(AI_DECKS[deckIdx]||AI_DECKS[0]).map(id=>getDef(id)).filter(Boolean);
+      }
       const counts={};deckDefs.forEach(c=>{counts[c.id]=(counts[c.id]||0)+1;});
       const uniq=Object.keys(counts).map(id=>getDef(id)).filter(Boolean).sort((a,b)=>a.cost-b.cost);
       const ov=document.createElement("div");
@@ -2426,11 +2502,9 @@ function onDown(e){
   if(!hs&&!om&&!em)return;
   e.preventDefault();const p=pt(e);
   if(hs){
-    if(!myTurn())return;
-    // Use each card's layout left offset (no rotation effect) + fan container position
-    // to find which card strip contains the touch. Reliable across all rotations.
+    // Always allow long-press zoom regardless of turn; block dragging if not turn
     const hw=document.querySelector(".hand-wrap");
-    let idx=+hs.dataset.hi; // fallback
+    let idx=+hs.dataset.hi;
     if(hw){
       const allHs=Array.from(hw.querySelectorAll(".hs"));
       const fanContainer=allHs[0]?.parentElement;
@@ -2445,10 +2519,16 @@ function onDown(e){
       }
     }
     const srcEl=hw?hw.querySelectorAll(".hs")[idx]:hs;
+    if(!myTurn()){
+      // Not our turn: only allow long-press zoom, no dragging
+      drag={active:true,type:"hand",cardIdx:idx,boardIdx:-1,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:srcEl||hs,wasLP:false,noAction:true};
+      lpTimer=setTimeout(()=>{lpTimer=null;if(!drag.dragging){drag.wasLP=true;showZoom(idx);}},500);
+      return;
+    }
     drag={active:true,type:"hand",cardIdx:idx,boardIdx:-1,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:srcEl||hs,wasLP:false};
     lpTimer=setTimeout(()=>{lpTimer=null;if(!drag.dragging){drag.wasLP=true;showZoom(idx);}},500);
   } else if(om){
-    if(!myTurn())return;
+    if(!myTurn()){return;}
     const bi=+om.dataset.oi;
     drag={active:true,type:"board",cardIdx:-1,boardIdx:bi,startX:p.x,startY:p.y,dragging:false,ghost:null,insertSlot:null,srcEl:null,wasLP:false};
     // long-press player board card → zoom
@@ -2501,6 +2581,7 @@ function onMove(e){
       }
     }
     clearLP();const g=GAME;if(!g)return;
+    if(drag.noAction)return; // not our turn — zoom-only mode, no drag
     if(drag.type==="hand"){
       const card=(myHand()||[])[drag.cardIdx];if(!card)return;
       drag.dragging=true;
@@ -3058,9 +3139,15 @@ const R=()=>document.getElementById("root");
 let _lastTurn=null;
 function render(){
   if(SCR==="menu")showMenu();
+  else if(SCR==="decks")showDecks();
   else if(SCR==="deck")showDeck();
   else if(SCR==="battle"&&GAME){showBattle();requestAnimationFrame(()=>updateLagBars());}
-  if(GAME&&!GAME.over&&GAME.turn==="player"&&_lastTurn!=="player"){setTimeout(()=>toast("你的回合！","ok"),90);}
+  // "你的回合" toast: perspective-aware for MP
+  if(GAME&&!GAME.over){
+    const isMyTurnNow=(GAME.turn==="player"&&!MP)||(GAME.turn==="player"&&MP?.role==="host")||(GAME.turn==="ai"&&MP?.role==="guest");
+    const wasMyTurnLast=((_lastTurn==="player"&&!MP)||(_lastTurn==="player"&&MP?.role==="host")||(_lastTurn==="ai"&&MP?.role==="guest"));
+    if(isMyTurnNow&&!wasMyTurnLast){setTimeout(()=>toast("你的回合！","ok"),90);}
+  }
   _lastTurn=GAME?.turn??null;
   if(GAME&&(GAME.lastDraws?.length||GAME.aiNewCard)){
     const draws=[...(GAME.lastDraws||[])];
