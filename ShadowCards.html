@@ -1414,18 +1414,24 @@ function startMpGame(role,code,hostDeckIds,guestDeckIds){
 
   // Items 6-7: Disconnect detection
   const oppRole=role==="host"?"guest":"host";
+  let disconnectHandled=false;
   db().ref(`rooms/${code}/connected/${oppRole}`).on("value",snap=>{
-    if(snap.val()===null&&GAME&&!GAME.over){
-      // Opponent disconnected
-      if(role==="host"){
-        toast("對手已離開，你獲得勝利！","ok");
-        GAME={...GAME,over:"win"};render();
-        setTimeout(()=>{try{db().ref(`rooms/${code}`).remove();}catch(e){}mpCleanup();SCR="menu";render();},3000);
-      }else{
-        toast("房主已離開，你獲得勝利！","ok");
-        GAME={...GAME,over:"win"};render();
-        setTimeout(()=>{mpCleanup();showLobby();},3000);
-      }
+    // Only react after game has started (opponent was connected at least once)
+    if(snap.val()!==null){
+      // Opponent was seen connected — from now on watch for removal
+      db().ref(`rooms/${code}/connected/${oppRole}`).once("value",()=>{}).catch(()=>{});
+      return;
+    }
+    if(disconnectHandled||!GAME||GAME.over)return;
+    disconnectHandled=true;
+    if(role==="host"){
+      toast("對手已離開，你獲得勝利！","ok");
+      GAME={...GAME,over:"win"};render();
+      setTimeout(()=>{try{db().ref(`rooms/${code}`).remove();}catch(e){}mpCleanup();SCR="menu";render();},3000);
+    }else{
+      toast("房主已離開，你獲得勝利！","ok");
+      GAME={...GAME,over:"win"};render();
+      setTimeout(()=>{mpCleanup();showLobby();},3000);
     }
   });
   if(role==="host"){
@@ -2085,16 +2091,19 @@ function buildDeck(){
   const mgmtEl=document.getElementById("deck-mgmt");
   if(mgmtEl){
     const saved=loadSavedDecks();
-    if(!saved.length){mgmtEl.innerHTML=`<div style="font-size:9px;color:#2a2a2a;font-family:monospace;text-align:center;padding:6px 0">尚未儲存任何自定義牌組</div>`;return;}
-    mgmtEl.innerHTML=`<div style="font-size:8px;color:#444;font-family:monospace;letter-spacing:2px;margin-bottom:6px">已儲存的牌組</div>`+
-      saved.map((d,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:3px;margin-bottom:4px">
-        <div style="flex:1">
-          <div style="font-size:10px;color:#888;font-family:monospace;font-weight:bold">${d.name}</div>
-          <div style="font-size:8px;color:#333;font-family:monospace">${d.ids.length}張</div>
-        </div>
-        <button onclick="if(confirm('確定刪除「${d.name}」?')){const s=loadSavedDecks();s.splice(${i},1);saveSavedDecks(s);toast('已刪除','ok');buildDeck();}" style="padding:3px 8px;background:rgba(180,30,30,.15);border:1px solid #3a1010;color:#883030;font-size:9px;border-radius:2px;letter-spacing:1px">刪除</button>
-        <button onclick="DECK=[...getAllDecks()[${i+1}].ids];toast('已載入：${d.name}','ok')" style="padding:3px 8px;background:rgba(30,30,80,.2);border:1px solid #1a1a4a;color:#4444aa;font-size:9px;border-radius:2px;letter-spacing:1px">載入</button>
-      </div>`).join("");
+    if(!saved.length){
+      mgmtEl.innerHTML=`<div style="font-size:9px;color:#2a2a2a;font-family:monospace;text-align:center;padding:6px 0">尚未儲存任何自定義牌組</div>`;
+    }else{
+      mgmtEl.innerHTML=`<div style="font-size:8px;color:#444;font-family:monospace;letter-spacing:2px;margin-bottom:6px">已儲存的牌組 (${saved.length}/5)</div>`+
+        saved.map((d,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:3px;margin-bottom:4px">
+          <div style="flex:1">
+            <div style="font-size:10px;color:#999;font-family:monospace;font-weight:bold">${d.name}</div>
+            <div style="font-size:8px;color:#333;font-family:monospace">${d.ids.length}張</div>
+          </div>
+          <button onclick="const s=loadSavedDecks();s.splice(${i},1);saveSavedDecks(s);toast('已刪除','ok');buildDeck();" style="padding:3px 7px;background:rgba(140,20,20,.18);border:1px solid #3a1010;color:#884444;font-size:9px;border-radius:2px">刪除</button>
+          <button onclick="deckEdit=[...getAllDecks()[${i+1}].ids];buildDeck();toast('已載入：${d.name}','ok');" style="padding:3px 7px;background:rgba(20,20,100,.18);border:1px solid #1a1a5a;color:#5555cc;font-size:9px;border-radius:2px">載入</button>
+        </div>`).join("");
+    }
   }
 
   // Pool card interactions
@@ -2229,15 +2238,14 @@ function showBattle(){
     if(viewDeckBtn)viewDeckBtn.onclick=()=>{
       Audio.sfxClick();
       const deckIdx=GAME.ai.deckIdx??0;
-      const deckDefs=AI_DECKS[deckIdx].map(id=>getDef(id)).filter(Boolean);
-      const deckNames=["急攻型","控制型","均衡型","仇恨戰吼型","法術型"];
+      const deckDefs=(MP?[]:AI_DECKS[deckIdx]||AI_DECKS[0]).map?.(id=>getDef(id)).filter(Boolean)||[];
       const counts={};deckDefs.forEach(c=>{counts[c.id]=(counts[c.id]||0)+1;});
       const uniq=Object.keys(counts).map(id=>getDef(id)).filter(Boolean).sort((a,b)=>a.cost-b.cost);
       const ov=document.createElement("div");
       ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:900;overflow-y:auto;padding:16px;box-sizing:border-box";
       ov.innerHTML=`<div style="max-width:360px;margin:0 auto">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-          <div><div style="font-size:14px;color:#c8a832;font-family:monospace;font-weight:bold">對手牌組</div><div style="font-size:9px;color:#555;font-family:monospace">${deckNames[deckIdx]||"未知"} · ${deckDefs.length}張</div></div>
+          <div><div style="font-size:14px;color:#c8a832;font-family:monospace;font-weight:bold">對手牌組</div><div style="font-size:9px;color:#555;font-family:monospace">${deckDefs.length}張</div></div>
           <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-left:auto;padding:5px 12px;background:#111;border:1px solid #333;color:#888;font-size:11px;border-radius:3px">✕</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -2246,17 +2254,13 @@ function showBattle(){
       </div>`;
       document.body.appendChild(ov);
       ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
-      // Fix 1: long-press on each card wrapper shows zoom
       ov.querySelectorAll("[data-id]").forEach(wrapper=>{
-        const cid=wrapper.dataset.id;
-        if(!cid)return;
+        const cid=wrapper.dataset.id;if(!cid)return;
         let lpT=null;
         const onStart=()=>{lpT=setTimeout(()=>{const def=getDef(cid);if(def)showZoomCard(def);lpT=null;},500);};
         const onEnd=()=>{if(lpT){clearTimeout(lpT);lpT=null;}};
-        wrapper.addEventListener("touchstart",onStart,{passive:true});
-        wrapper.addEventListener("touchend",onEnd);
-        wrapper.addEventListener("mousedown",onStart);
-        wrapper.addEventListener("mouseup",onEnd);
+        wrapper.addEventListener("touchstart",onStart,{passive:true});wrapper.addEventListener("touchend",onEnd);
+        wrapper.addEventListener("mousedown",onStart);wrapper.addEventListener("mouseup",onEnd);
       });
     };
   },0);
@@ -2333,7 +2337,7 @@ function showBattle(){
       <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:6px">手牌 ${ai.hand.length}/10</span>
       <span style="font-size:10px;color:#ccc;font-family:monospace;margin-left:4px">牌庫剩餘 ${ai.deck.length}</span>
       <button id="view-ai-deck" style="margin-left:auto;padding:3px 8px;background:rgba(80,60,20,.4);border:1px solid #4a3a10;color:#b8902a;font-size:8px;letter-spacing:1px;border-radius:2px">查看牌組</button>
-      ${MP&&GAME.turn==="player"?`<span style="font-size:10px;color:#6a9a6a;letter-spacing:1px;font-family:monospace;animation:mist 2s ease-in-out infinite">等待對手...</span>`:turn==="ai"&&!over&&!MP?`<span style="font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">思考中...</span>`:""}
+      ${MP&&GAME.turn!==( MP.role==="guest"?"ai":"player")?`<span style="font-size:10px;color:#6a9a6a;letter-spacing:1px;font-family:monospace;animation:mist 2s ease-in-out infinite">等待對手...</span>`:!MP&&turn==="ai"&&!over?`<span style="font-size:11px;color:#99aacc;letter-spacing:2px;font-style:italic">思考中...</span>`:""}
     </div>
     <div class="ai-hand-wrap">${hAIFan(ai.hand.length,aiNewCard)}</div>
     <div class="hp-bar-row top" style="padding:0 14px;gap:10px">
@@ -2372,8 +2376,16 @@ function showBattle(){
       setTimeout(()=>{window._aiStage=nextStage;},800);
     }
     if(over&&MP){setTimeout(()=>{try{db().ref(`rooms/${MP.roomCode}`).remove();}catch(e){}},3000);}
-    document.getElementById("gmn").onclick=()=>{Audio.sfxClick();mpCleanup();GAME=null;SCR="menu";render();};return;}
-  document.getElementById("bsv").onclick=()=>{Audio.sfxClick();GAME=null;SCR="menu";render();};
+    document.getElementById("gmn").onclick=()=>{
+      Audio.sfxClick();
+      if(MP?.roomCode&&MP.role)try{db().ref(`rooms/${MP.roomCode}/connected/${MP.role}`).remove();}catch(e){}
+      mpCleanup();GAME=null;SCR="menu";render();
+    };return;}
+  document.getElementById("bsv").onclick=()=>{
+    Audio.sfxClick();
+    if(MP?.roomCode&&MP.role)try{db().ref(`rooms/${MP.roomCode}/connected/${MP.role}`).remove();}catch(e){}
+    mpCleanup();GAME=null;SCR="menu";render();
+  };
   if(isP){
     document.getElementById("bet").onclick=()=>{if(animLock){toast("動作進行中...","warn");return;}Audio.sfxEndTurn();act({t:"ET"});};
     const bc=document.getElementById("bcn");if(bc)bc.onclick=()=>{Audio.sfxClick();act({t:"CL"});};
@@ -2490,22 +2502,21 @@ function onMove(e){
     }
     clearLP();const g=GAME;if(!g)return;
     if(drag.type==="hand"){
-      const card=g.player.hand[drag.cardIdx];if(!card)return;
+      const card=(myHand()||[])[drag.cardIdx];if(!card)return;
       drag.dragging=true;
-      const invalid=card.cost>g.player.mana||(card.type==="minion"&&g.player.board.length>=7);
+      const invalid=card.cost>(myMana()||0)||(card.type==="minion"&&(myBoard()||[]).length>=7);
       drag.invalid=invalid;
       if(drag.srcEl)drag.srcEl.classList.add("src-ghost");
       const ghost=document.createElement("div");ghost.id="drag-ghost";
-      ghost.innerHTML=hCard(card,false,false,false,!invalid&&card.cost<=g.player.mana);
+      ghost.innerHTML=hCard(card,false,false,false,!invalid&&card.cost<=(myMana()||0));
       document.body.appendChild(ghost);drag.ghost=ghost;
-      // Red glow on ghost if invalid
       if(invalid){const gc=ghost.querySelector(".card");if(gc)gc.classList.add("invalid-drag");}
       if(!invalid&&card.type!=="minion"&&(card.effect==="dmg"||card.effect==="drain")){
         document.querySelectorAll(".em").forEach(el=>el.classList.add("drop-hi"));
         const ah=document.getElementById("ah");if(ah)ah.classList.add("drop-hi");
       }
     } else if(drag.type==="board"){
-      const m=g.player.board[drag.boardIdx];
+      const m=(myBoard()||[])[drag.boardIdx];
       const invalid=!m||m.sick||m.attacked;
       if(!m){drag.active=false;return;}
       drag.dragging=true;drag.invalid=invalid;
