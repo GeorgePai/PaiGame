@@ -2020,7 +2020,13 @@ function getAllDecks(){
   return[DEFAULT_SAVED_DECK,...saved];
 }
 
-function showDeck(){deckEdit=deckEdit.length?deckEdit:[...DECK];buildDeck();}
+function showDeck(){
+  // If _editingDeckIdx is -1, it's a new deck — start empty
+  // If >=0, deckEdit was already loaded by showDecks
+  if(window._editingDeckIdx===undefined)window._editingDeckIdx=-1;
+  if(window._editingDeckIdx===-1)deckEdit=[];
+  buildDeck();
+}
 function buildDeck(){
   if(!window._deckTab)window._deckTab="minion";
   const tab=window._deckTab;
@@ -2080,12 +2086,14 @@ function buildDeck(){
   if(!grp.length)li=`<div style="color:#666;font-size:11px;text-align:center;margin-top:50px">牌組為空</div>`;
   if(tot>0&&tot<30)li+=`<div style="margin-top:10px;font-size:10px;color:#d4c840;text-align:center;letter-spacing:1px">還需 ${30-tot} 張</div>`;
 
+  const isNewDeck=window._editingDeckIdx===-1; // -1 = new deck, >=0 = editing existing
+
   R().innerHTML=`<div class="dscreen"><div class="dhead">
     <button id="dbk" style="background:none;border:1px solid #222;color:#777;padding:6px 14px;font-size:11px">← 返回</button>
     <span style="font-size:16px;letter-spacing:4px;color:#ccc">我的卡牌</span>
-    <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <span style="font-size:12px;font-family:monospace;color:${tot===30?"#7d7":"#d4c840"}">${tot}/30</span>
-      <button id="dsv" style="padding:7px 16px;background:${tot===30?"#ede9dc":"#111"};color:${tot===30?"#000":"#444"};border:none;font-size:11px;letter-spacing:2px">儲存牌組</button>
+      ${isNewDeck?"":`<button id="dsv" style="padding:7px 14px;background:${tot===30?"#ede9dc":"#111"};color:${tot===30?"#000":"#444"};border:none;font-size:11px;letter-spacing:2px;border-radius:2px">儲存牌組</button>`}
       <button id="dsave-custom" style="padding:7px 12px;background:transparent;color:#7c3aed;border:1px solid #3a1a7a;font-size:10px;letter-spacing:1px;border-radius:2px">另存新牌組</button>
     </div>
   </div><div class="dbody">
@@ -2106,7 +2114,6 @@ function buildDeck(){
         ${chart}
       </div>
       <div class="dlist-body"><div style="margin-top:8px">${li}</div></div>
-      <div id="deck-mgmt" style="margin-top:10px;padding-top:8px;border-top:1px solid #111"></div>
     </div>
   </div></div>`;
 
@@ -2139,7 +2146,18 @@ function buildDeck(){
   _prevBarH=targetHeights.map(t=>t?.h??0);
 
   document.getElementById("dbk").onclick=()=>{_prevBarH=null;Audio.sfxClick();SCR="decks";render();};
-  document.getElementById("dsv").onclick=()=>{if(tot!==30){toast("需要30張才能儲存","err");return;}Audio.sfxClick();DECK=[...deckEdit];const ei=window._editingDeckIdx??-1;if(ei>0){const sv=loadSavedDecks();const si=ei-1;if(si>=0&&si<sv.length){sv[si].ids=[...deckEdit];saveSavedDecks(sv);}toast("已儲存","ok");}SCR="decks";render();};
+  const dsvEl=document.getElementById("dsv");
+  if(dsvEl)dsvEl.onclick=()=>{
+    if(tot!==30){toast("需要30張才能儲存","err");return;}
+    Audio.sfxClick();
+    DECK=[...deckEdit];
+    const ei=window._editingDeckIdx??-1;
+    if(ei>0){
+      const sv=loadSavedDecks();const si=ei-1;
+      if(si>=0&&si<sv.length){sv[si].ids=[...deckEdit];saveSavedDecks(sv);toast("已儲存","ok");}
+    }
+    SCR="decks";render();
+  };
   document.getElementById("dclr").onclick=()=>{if(deckEdit.length===0)return;Audio.sfxClick();deckEdit=[];buildDeck();};
   const saveDeckBtn=document.getElementById("dsave-custom");
   if(saveDeckBtn)saveDeckBtn.onclick=()=>{
@@ -2153,24 +2171,6 @@ function buildDeck(){
     buildDeck();
   };
 
-  // Item 8: Show saved decks management panel
-  const mgmtEl=document.getElementById("deck-mgmt");
-  if(mgmtEl){
-    const saved=loadSavedDecks();
-    if(!saved.length){
-      mgmtEl.innerHTML=`<div style="font-size:9px;color:#2a2a2a;font-family:monospace;text-align:center;padding:6px 0">尚未儲存任何自定義牌組</div>`;
-    }else{
-      mgmtEl.innerHTML=`<div style="font-size:8px;color:#444;font-family:monospace;letter-spacing:2px;margin-bottom:6px">已儲存的牌組 (${saved.length}/5)</div>`+
-        saved.map((d,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:3px;margin-bottom:4px">
-          <div style="flex:1">
-            <div style="font-size:10px;color:#999;font-family:monospace;font-weight:bold">${d.name}</div>
-            <div style="font-size:8px;color:#333;font-family:monospace">${d.ids.length}張</div>
-          </div>
-          <button onclick="const s=loadSavedDecks();s.splice(${i},1);saveSavedDecks(s);toast('已刪除','ok');buildDeck();" style="padding:3px 7px;background:rgba(140,20,20,.18);border:1px solid #3a1010;color:#884444;font-size:9px;border-radius:2px">刪除</button>
-          <button onclick="deckEdit=[...getAllDecks()[${i+1}].ids];buildDeck();toast('已載入：${d.name}','ok');" style="padding:3px 7px;background:rgba(20,20,100,.18);border:1px solid #1a1a5a;color:#5555cc;font-size:9px;border-radius:2px">載入</button>
-        </div>`).join("");
-    }
-  }
 
   // Pool card interactions
   document.querySelectorAll(".pc[data-id]").forEach(card=>{
