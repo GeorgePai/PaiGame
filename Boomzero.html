@@ -1608,8 +1608,8 @@ function renderChar(c) {
     // Display: actual world angle from horizontal (body tilt included)
     const bSD = terrainSlopeAt(c.x) * 180 / Math.PI;
     const dispDeg = f > 0
-      ? Math.max(0, Math.round(c.angle - bSD))
-      : Math.max(0, Math.round(180 - c.angle + bSD));
+      ? Math.round(c.angle - bSD)
+      : Math.round(180 - c.angle + bSD);
     ctx.font='bold 22px "Bebas Neue",monospace';
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.strokeStyle='rgba(0,0,0,.9)'; ctx.lineWidth=4;
