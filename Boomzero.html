@@ -1605,7 +1605,7 @@ function renderChar(c) {
     // Angle label
     const nx = aDy, ny = -aDx;
     const lx = wHX + aDx*(pLen+6) + nx*14, ly = wHY + aDy*(pLen+6) + ny*14;
-    // Display = world elevation angle (c.angle tilted by body slope)
+    // Display: actual world angle from horizontal (body tilt included)
     const bSD = terrainSlopeAt(c.x) * 180 / Math.PI;
     const dispDeg = f > 0
       ? Math.max(0, Math.round(c.angle - bSD))
@@ -1770,8 +1770,9 @@ function loop(ts) {
           updateHUD();
         }
       }
-      if (BTN.am) setAngle(G.player.angle-0.6);
-      if (BTN.ap) setAngle(G.player.angle+0.6);
+      const _af=G.player.facing;
+      if (BTN.am) setAngle(G.player.angle - 0.6*_af);
+      if (BTN.ap) setAngle(G.player.angle + 0.6*_af);
 
       // Charge power
       if (G.charging) {
