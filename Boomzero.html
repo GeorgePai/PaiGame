@@ -136,32 +136,56 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
 /* power bar */
 #pwr-track{
   flex:1;position:relative;
-  height:clamp(26px,5vh,34px);
-  background:#060606;
-  border:1px solid #252525;
+  height:clamp(28px,5.5vh,36px);
+  background:linear-gradient(to bottom,#0e0e0e 0%,#050505 40%,#0a0a0a 100%);
+  border:1px solid #3a3a3a;
+  border-top-color:#555;
+  border-bottom-color:#111;
+  border-radius:3px;
   overflow:hidden;
+  /* outer glass depth */
+  box-shadow:
+    0 2px 6px rgba(0,0,0,0.8),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.6);
 }
 #pwr-ghost{
   position:absolute;left:0;top:0;height:100%;width:0%;
-  background:rgba(255,255,255,.13);
-  border-right:2px solid rgba(255,255,255,.35);
+  background:rgba(255,180,60,.18);
+  border-right:2px solid rgba(255,160,40,.45);
   transition:none;z-index:1;
 }
+/* Liquid orange fill with gloss */
 #pwr-fill{
   position:absolute;left:0;top:0;height:100%;width:0%;
-  background:rgba(255,130,0,0.55);transition:none;z-index:2;
+  background:linear-gradient(to bottom,
+    rgba(255,180,60,0.9) 0%,
+    rgba(255,110,0,0.85) 45%,
+    rgba(200,70,0,0.9) 100%);
+  transition:none;z-index:2;
+  box-shadow:inset 0 1px 0 rgba(255,220,120,0.5);
 }
-/* SVG tick overlay injected by JS */
+/* Glass top sheen (always full width, on top of fill) */
+#pwr-sheen{
+  position:absolute;left:0;top:0;right:0;
+  height:38%;
+  background:linear-gradient(to bottom,
+    rgba(255,255,255,0.13) 0%,
+    rgba(255,255,255,0.03) 100%);
+  border-radius:3px 3px 0 0;
+  z-index:5;pointer-events:none;
+}
+/* SVG tick overlay */
 #pwr-ticks{
   position:absolute;inset:0;z-index:3;pointer-events:none;
 }
 #pwr-pct{
-  position:absolute;right:7px;top:50%;transform:translateY(-50%);
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
   font-family:'Bebas Neue',sans-serif;
   font-size:clamp(11px,2.5vw,15px);
-  color:rgba(255,255,255,.75);
-  mix-blend-mode:difference;
-  z-index:4;pointer-events:none;
+  color:rgba(255,255,255,0.9);
+  text-shadow:0 0 6px rgba(0,0,0,0.9),0 1px 2px rgba(0,0,0,1);
+  z-index:6;pointer-events:none;
   letter-spacing:1px;
 }
 /* controls centering */
@@ -218,17 +242,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
         <button class="btn bsm" id="btn-ap">角 +</button>
       </div>
       <button class="btn bsm" id="btn-mr">右 →</button>
-      <button class="btn bsm" id="btn-wpn" style="min-width:52px">⬡ 武器</button>
-      <button class="btn bsm" id="btn-skip" style="min-width:52px;color:rgba(255,200,80,0.85)">⏩ 跳過</button>
+      <button class="btn bsm" id="btn-wpn" style="min-width:52px">加農砲</button>
+      <button class="btn bsm" id="btn-skip" style="min-width:52px;color:rgba(255,200,80,0.85)">跳過回合</button>
     </div>
     <div id="ctrl-bot">
       <div id="pwr-track">
         <div id="pwr-ghost"></div>
         <div id="pwr-fill"></div>
+        <div id="pwr-sheen"></div>
         <svg id="pwr-ticks" preserveAspectRatio="none"></svg>
         <span id="pwr-pct">0%</span>
       </div>
-      <button class="btn blg" id="btn-fire">發射</button>
+      <button class="btn blg" id="btn-fire">集氣發射</button>
     </div>
   </div>
 </div>
@@ -975,6 +1000,7 @@ function setupControls() {
     e.preventDefault(); initAudio();
     if (G.phase!=='player') return;
     G.charging=true; G.chargeT=performance.now();
+    updatePowerUI(0);
     startChargeSound();
     btnFire.classList.add('held');
   });
@@ -984,7 +1010,7 @@ function setupControls() {
     stopChargeSound();
     btnFire.classList.remove('held');
     if (G.power>0.01 && G.phase==='player') firePlayer();
-    updatePowerUI(0);
+    // Keep % displayed — cleared when next charge starts
   };
   btnFire.addEventListener('pointerup',doFire);
   btnFire.addEventListener('pointercancel',doFire);
@@ -1002,6 +1028,7 @@ function setupControls() {
     const i=(G.player.wpnIdx+1)%WEAPONS.length;
     G.player.wpnIdx=i;
     G.player.weapon={...WEAPONS[i]};
+    document.getElementById('btn-wpn').textContent=WEAPONS[i].zhName;
     const w=WEAPONS[i];
     showOverlay(`<div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="font-size:1.1em">${w.sym} ${w.zhName}</div><div style="font-size:clamp(9px,1.8vw,12px);letter-spacing:1px;color:#bbb;font-family:'Share Tech Mono',monospace;line-height:2;text-align:center">攻擊：${w.atk}<br>防禦：${w.def}<br>敏捷：${w.agi}<br>破壞：${w.dex}<br>爆擊率：${Math.round(w.critRate*100)}%<br>爆傷倍率：×${w.critDmg}</div></div>`,2200);
   });
@@ -1163,7 +1190,7 @@ function renderChar(c) {
   ctx.globalAlpha=(c.alive?1:0.18)*.45;
   ctx.font=`9px "Share Tech Mono"`;
   ctx.fillStyle='#fff';ctx.textAlign='center';
-  ctx.font='8px "Share Tech Mono"'; ctx.fillText(WEAPONS[c.wpnIdx].zhName,c.x,c.y-CR-8);
+
   ctx.globalAlpha=c.alive?1:0.18;
 
   // Aim indicator (player only, short straight line)
@@ -1417,6 +1444,7 @@ function loop(ts) {
 function restart() {
   G.particles=[]; G.texts=[];
   G.proj=null; G.charging=false;
+  updatePowerUI(0);
   G.screenShake=0; G.turn=0;
   G.dragStart=null; G.dragMoved=false;
   updatePowerUI(0);
@@ -1430,6 +1458,7 @@ function restart() {
   camFollow(G.player.x);
   lastTickedAngle=-999;
   setAngle(45);
+  document.getElementById('btn-wpn').textContent=WEAPONS[0].zhName;
   document.getElementById('round-num').textContent='R·1';
   updateHUD();
   startPlayerTurn();
