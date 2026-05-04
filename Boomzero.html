@@ -7,7 +7,7 @@
 <title>彈彈堂 · ZERO</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
 :root{
   --bg:#030303;--border:#1a1a1a;--dim:#555;--hi:#fff;--faint:#111;
   --btn-bg:#0d0d0d;--btn-border:#2a2a2a;--btn-active:#222;
@@ -1271,27 +1271,27 @@ function renderChar(c) {
 
   // ── Body anchor points ────────────────────────────
   const hipX = c.x;
-  const hipY = c.y + 5;
+  const hipY = c.y + 6;
   const torX = c.x + hitLean * 0.5 + sKick * 0.5;
-  const torY = c.y - 8;
+  const torY = c.y - 14;
   const hdX  = c.x + hitLean * 0.7 + sKick * 0.3;
-  const hdY  = c.y - 18;
+  const hdY  = c.y - 28;
 
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.shadowBlur = 0;
+  ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.shadowBlur = 0;
 
   // ── Legs ──────────────────────────────────────────
-  const footY  = c.y + 14;
-  const kneeY  = c.y + 7;
-  const buckle = c.hitAnim * 5;
+  const footY  = c.y + 15;
+  const kneeY  = c.y + 10;
+  const buckle = c.hitAnim * 7;
 
-  const lKnX = hipX - 3.5 - ls * 5 + buckle;
+  const lKnX = hipX - 4.5 - ls * 7 + buckle;
   const lKnY = kneeY + Math.abs(ls) * 2;
-  const lFtX = hipX - ls * 9 + buckle * 0.5;
+  const lFtX = hipX - ls * 13 + buckle * 0.5;
 
-  const rKnX = hipX + 3.5 + ls * 5 - buckle;
+  const rKnX = hipX + 4.5 + ls * 7 - buckle;
   const rKnY = kneeY + Math.abs(ls) * 2;
-  const rFtX = hipX + ls * 9 - buckle * 0.5;
+  const rFtX = hipX + ls * 13 - buckle * 0.5;
 
   ctx.beginPath(); ctx.moveTo(hipX,hipY); ctx.lineTo(lKnX,lKnY); ctx.lineTo(lFtX,footY); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(hipX,hipY); ctx.lineTo(rKnX,rKnY); ctx.lineTo(rFtX,footY); ctx.stroke();
@@ -1300,8 +1300,8 @@ function renderChar(c) {
   ctx.beginPath(); ctx.moveTo(hipX,hipY); ctx.lineTo(torX,torY); ctx.stroke();
 
   // ── Arms ──────────────────────────────────────────
-  const shWX = torX + f*4, shWY = torY + 2;   // weapon-side shoulder
-  const shNX = torX - f*4, shNY = torY + 2;   // off-side shoulder
+  const shWX = torX + f*6, shWY = torY + 2;   // weapon-side shoulder
+  const shNX = torX - f*6, shNY = torY + 2;   // off-side shoulder
 
   const aimRad = c.angle * Math.PI / 180;
   const aDx = Math.cos(aimRad), aDy = -Math.sin(aimRad);
@@ -1315,8 +1315,8 @@ function renderChar(c) {
   if (isAiming) {
     // Weapon arm follows aim angle; recoil kick on fire
     const rc = c.shootAnim * 5;
-    wEX = shWX + aDx*8  - aDx*rc;  wEY = shWY + aDy*8  - aDy*rc;
-    wHX = shWX + aDx*16 - aDx*rc;  wHY = shWY + aDy*16 - aDy*rc;
+    wEX = shWX + aDx*11 - aDx*rc;  wEY = shWY + aDy*11 - aDy*rc;
+    wHX = shWX + aDx*22 - aDx*rc;  wHY = shWY + aDy*22 - aDy*rc;
     // Off-side arm: slight counterbalance
     const bal = -ls * f;
     nEX = shNX - f*3 + bal*2; nEY = shNY + 6;
@@ -1324,19 +1324,19 @@ function renderChar(c) {
   } else {
     // Idle / walk swing
     const sw = ls * f;
-    wEX = shWX + f*3 - sw*3; wEY = shWY + 7;
-    wHX = shWX + f*5 - sw*6; wHY = shWY + 14;
-    nEX = shNX - f*3 + sw*3; nEY = shNY + 7;
-    nHX = shNX - f*5 + sw*6; nHY = shNY + 14;
+    wEX = shWX + f*4 - sw*4; wEY = shWY + 9;
+    wHX = shWX + f*7 - sw*8; wHY = shWY + 19;
+    nEX = shNX - f*4 + sw*4; nEY = shNY + 9;
+    nHX = shNX - f*7 + sw*8; nHY = shNY + 19;
   }
 
   // Hit override: arms flung outward
   if (c.hitAnim > 0.05) {
     const h = c.hitAnim, hd = c.hitDir;
-    wEX = shWX + hd*h*5;  wEY = shWY - h*7;
-    wHX = shWX + hd*h*10; wHY = shWY - h*12;
-    nEX = shNX + hd*h*4;  nEY = shNY - h*5;
-    nHX = shNX + hd*h*8;  nHY = shNY - h*9;
+    wEX = shWX + hd*h*7;  wEY = shWY - h*9;
+    wHX = shWX + hd*h*14; wHY = shWY - h*16;
+    nEX = shNX + hd*h*6;  nEY = shNY - h*7;
+    nHX = shNX + hd*h*11; nHY = shNY - h*12;
   }
 
   ctx.beginPath(); ctx.moveTo(shWX,shWY); ctx.lineTo(wEX,wEY); ctx.lineTo(wHX,wHY); ctx.stroke();
@@ -1345,11 +1345,11 @@ function renderChar(c) {
   // ── Head ──────────────────────────────────────────
   const headTilt = c.hitAnim * c.hitDir * 4;
   ctx.fillStyle = bg; ctx.strokeStyle = col; ctx.lineWidth = 1.8;
-  ctx.beginPath(); ctx.arc(hdX + headTilt, hdY, 5.5, 0, Math.PI*2);
+  ctx.beginPath(); ctx.arc(hdX + headTilt, hdY, 8, 0, Math.PI*2);
   ctx.fill(); ctx.stroke();
   // Eye
   ctx.fillStyle = col;
-  ctx.beginPath(); ctx.arc(hdX + headTilt + f*2.5, hdY - 1, 1.6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hdX + headTilt + f*3.5, hdY - 1, 2.2, 0, Math.PI*2); ctx.fill();
 
   // ── Aim projection (player only) ──────────────────
   if (c.isPlayer && G.phase==='player') {
@@ -1365,7 +1365,7 @@ function renderChar(c) {
     // Angle label
     const nx = aDy, ny = -aDx;
     const lx = wHX + aDx*(pLen+6) + nx*14, ly = wHY + aDy*(pLen+6) + ny*14;
-    ctx.font='bold 13px "Bebas Neue",monospace';
+    ctx.font='bold 17px "Bebas Neue",monospace';
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.strokeStyle='rgba(0,0,0,.9)'; ctx.lineWidth=4;
     ctx.strokeText(Math.round(c.angle)+'°', lx, ly);
