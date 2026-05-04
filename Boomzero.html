@@ -905,7 +905,7 @@ function charGravity(c) {
 // ════════════════════════════════════════════════════
 function calcDmg(att, def, falloff) {
   const w = att.weapon;
-  let dmg = w.atk * falloff;
+  let dmg = w.atk * Math.min(1, falloff); // cap at 100%
   const defRed = def.weapon.def / (def.weapon.def + 130);
   dmg *= (1 - defRed * .55);
   const isCrit = Math.random() < w.critRate;
@@ -1854,7 +1854,11 @@ function loop(ts) {
             camFollow(G.player.x);
             G.whoFired='player'; G.phase='post'; G.postTimer=50;
           } else {
-            if (res!=='oob') doExplosion(G.proj.x,G.proj.y,G.proj);
+            if (res!=='oob') {
+              const ex = (res && res.hit) ? res.hit.x : G.proj.x;
+              const ey = (res && res.hit) ? res.hit.y : G.proj.y;
+              doExplosion(ex, ey, G.proj);
+            }
             G.proj=null;
             if (!checkOver()) { G.phase='post'; G.postTimer=75; }
           }
