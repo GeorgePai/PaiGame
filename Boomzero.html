@@ -202,6 +202,25 @@ rgba(255,255,255,0.03) 100%);
 border-radius:3px 3px 0 0;
 z-index:5;pointer-events:none;
 }
+#turn-toast{
+position:absolute;top:40%;left:50%;
+transform:translateX(-50%);
+font-family:‘Bebas Neue’,sans-serif;
+font-size:clamp(22px,5.5vw,36px);
+letter-spacing:8px;color:#fff;
+text-shadow:0 0 28px rgba(255,255,255,.55),0 2px 4px rgba(0,0,0,.9);
+pointer-events:none;white-space:nowrap;
+opacity:0;z-index:25;
+}
+#turn-toast.show{
+animation:toastFade 1.8s cubic-bezier(.22,.61,.36,1) forwards;
+}
+@keyframes toastFade{
+0%  {opacity:0;transform:translateX(-50%) scale(.82);}
+14% {opacity:1;transform:translateX(-50%) scale(1);}
+72% {opacity:1;transform:translateX(-50%) scale(1);}
+100%{opacity:0;transform:translateX(-50%) scale(1.06);}
+}
 /* SVG tick overlay */
 #pwr-ticks{
 position:absolute;inset:0;z-index:3;pointer-events:none;
@@ -289,6 +308,7 @@ box-shadow:0 1px 5px rgba(0,0,0,0.4),inset 0 2px 6px rgba(0,30,20,0.4) !importan
   <div id="vp">
     <canvas id="gc"></canvas>
     <div id="overlay">點擊或觸碰以開始</div>
+    <div id="turn-toast"></div>
   </div>
 
   <div id="ctrl">
@@ -732,7 +752,11 @@ function firePlane() {
 }
 
 function showTurnToast(txt) {
-  G.toast = { txt, life: 100 };
+  const el = document.getElementById('turn-toast');
+  el.textContent = txt;
+  el.classList.remove('show');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('show');
   sfx('turnStart');
 }
 
@@ -1334,13 +1358,11 @@ function render() {
 
   // Screen-space elements
   renderMinimap();
-  renderToast();
 }
 
 function renderPlane(p) {
-  // Render paper plane projectile (rotated to velocity direction)
   const angle=Math.atan2(p.vy,p.vx);
-  // Trail (cyan dots)
+  // Trail
   for(let i=0;i<p.trail.length;i++){
     const t=p.trail[i];
     ctx.globalAlpha=(i/p.trail.length)*0.45;
@@ -1350,38 +1372,34 @@ function renderPlane(p) {
   ctx.globalAlpha=1;
   ctx.save();
   ctx.translate(p.x,p.y);
-  ctx.rotate(angle);
+  // +Math.PI so nose (drawn at -x) faces velocity direction
+  ctx.rotate(angle+Math.PI);
   ctx.strokeStyle='#7ff'; ctx.fillStyle='rgba(100,255,240,0.15)';
   ctx.lineWidth=1.8; ctx.lineCap='round'; ctx.lineJoin='round';
   ctx.shadowColor='#0ff'; ctx.shadowBlur=8;
-  // Body
-  ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(-14,0);ctx.stroke();
-  // Upper wing
-  ctx.beginPath();ctx.moveTo(3,0);ctx.lineTo(7,-11);ctx.lineTo(-12,0);ctx.closePath();
-  ctx.fill();ctx.stroke();
-  // Lower wing
-  ctx.beginPath();ctx.moveTo(3,0);ctx.lineTo(7,11);ctx.lineTo(-12,0);ctx.closePath();
-  ctx.fill();ctx.stroke();
-  // Tail
-  ctx.beginPath();ctx.moveTo(-12,0);ctx.lineTo(-14,-6);ctx.lineTo(-14,0);ctx.closePath();
-  ctx.fill();ctx.stroke();
+  // Nose: sharp point at -x (faces forward after +π)
+  // Body silhouette: tapered fuselage
+  ctx.beginPath();
+  ctx.moveTo(-16, 0);    // nose tip
+  ctx.lineTo(-4, -3);    // upper front body
+  ctx.lineTo( 10, -3);   // upper rear body
+  ctx.lineTo( 14,  0);   // tail end
+  ctx.lineTo( 10,  3);   // lower rear body
+  ctx.lineTo( -4,  3);   // lower front body
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // Upper wing: swept back from front of body
+  ctx.beginPath();
+  ctx.moveTo(-4, -3);    // front wing root
+  ctx.lineTo( 2, -14);   // wing tip (swept back)
+  ctx.lineTo(10, -3);    // rear wing root
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // Lower wing: mirror
+  ctx.beginPath();
+  ctx.moveTo(-4,  3);
+  ctx.lineTo( 2,  14);
+  ctx.lineTo(10,  3);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.shadowBlur=0;
-  ctx.restore();
-}
-
-function renderToast() {
-  const t=G.toast;
-  if (!t||t.life<=0) return;
-  t.life--;
-  const a=t.life>80?(100-t.life)/20:t.life/80;
-  ctx.save();
-  ctx.globalAlpha=Math.max(0,a);
-  ctx.font=`bold ${Math.round(28+a*6)}px "Bebas Neue",monospace`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.lineWidth=6;
-  ctx.strokeText(t.txt, VW/2, WH/2-20);
-  ctx.fillStyle='#fff';
-  ctx.fillText(t.txt, VW/2, WH/2-20);
   ctx.restore();
 }
 
